@@ -29,6 +29,10 @@ namespace SpinTheScrap.Core
         public int MaxRelics = 5;
         public int RelicOffersPerCycle = 3;
 
+        /// <summary>サイクル 1 の施設の部屋数（入口を含む）。サイクルごとに 1 部屋ずつ増える。</summary>
+        public int BaseRoomCount = 4;
+        public int MaxRoomCount = 9;
+
         public List<string> StartingReel = new List<string> { "empty_can", "empty_can", "empty_can", "empty_can", "empty_can" };
 
         public double QuotaFor(int cycle)
@@ -37,6 +41,12 @@ namespace SpinTheScrap.Core
             if (Quotas.Length == 0) throw new InvalidOperationException("Quotas is empty");
             if (cycle <= Quotas.Length) return Quotas[cycle - 1];
             return Quotas[Quotas.Length - 1] * Math.Pow(EndlessQuotaGrowth, cycle - Quotas.Length);
+        }
+
+        public int RoomCountFor(int cycle)
+        {
+            if (cycle < 1) throw new ArgumentOutOfRangeException(nameof(cycle));
+            return Math.Min(BaseRoomCount + cycle - 1, MaxRoomCount);
         }
 
         public double SpinCostFor(int cycle, int spinsThisCycle)
