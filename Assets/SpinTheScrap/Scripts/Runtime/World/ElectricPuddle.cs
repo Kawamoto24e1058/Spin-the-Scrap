@@ -1,4 +1,5 @@
 using System;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.Interaction;
 using SpinTheScrap.Player;
@@ -25,6 +26,7 @@ namespace SpinTheScrap.World
         Light glow;
         float shortedUntil = -1f;
         bool? shownLive;
+        AudioSource buzz;
 
         public bool IsLive => Time.time >= shortedUntil;
 
@@ -35,6 +37,7 @@ namespace SpinTheScrap.World
             player = playerHealth;
             surface = surfaceRenderer;
             glow = glowLight;
+            buzz = Sfx.CreateLoop(gameObject, SfxClips.BuzzLoop, 0.5f, 12f);
             UpdateLook();
         }
 
@@ -76,8 +79,11 @@ namespace SpinTheScrap.World
             if (surface != null && live != shownLive)
             {
                 MaterialUtil.SetColor(surface.material, live ? LiveColor : ShortedColor);
+                // ショートした瞬間と、戻った瞬間にバチッと鳴らす
+                if (shownLive.HasValue) Sfx.PlayAt(SfxClips.Shatter, transform.position, 0.35f, live ? 1.6f : 0.6f);
                 shownLive = live;
             }
+            if (buzz != null) buzz.volume = live ? 0.5f : 0f;
             if (glow != null)
             {
                 glow.enabled = live;

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.World;
 using UnityEngine;
@@ -27,6 +28,7 @@ namespace SpinTheScrap.Interaction
         readonly Collider[] overlap = new Collider[32];
         readonly HashSet<Rigidbody> counted = new HashSet<Rigidbody>();
         float nextRattleTime;
+        AudioSource rattle;
 
         public Rigidbody Body => body;
         public Collider[] Colliders => ownColliders;
@@ -74,6 +76,7 @@ namespace SpinTheScrap.Interaction
             cart.rules = toolRules;
             cart.body = rb;
             cart.ownColliders = go.GetComponentsInChildren<Collider>();
+            cart.rattle = Sfx.CreateLoop(go, SfxClips.RattleLoop, 0f, 20f);
             return cart;
         }
 
@@ -124,9 +127,16 @@ namespace SpinTheScrap.Interaction
         void FixedUpdate()
         {
             CountLoad();
-            if (rules == null || Time.time < nextRattleTime) return;
             var v = body.linearVelocity;
             float speed = new Vector2(v.x, v.z).magnitude;
+            if (rattle != null && rules != null)
+            {
+                // ゆっくりなら小さくコロコロ、速いとガタガタ鳴る（敵に聞こえるのは速いときだけ）
+                float loud = speed > rules.CartRattleSpeed ? 0.6f : 0.12f;
+                rattle.volume = speed < 0.3f ? 0f : loud * Mathf.Clamp01(speed / 3f) + 0.05f;
+                rattle.pitch = 0.8f + Mathf.Clamp01(speed / 4f) * 0.5f;
+            }
+            if (rules == null || Time.time < nextRattleTime) return;
             float radius = (float)rules.CartRattleRadius(speed, LoadKg);
             if (radius <= 0f) return;
             nextRattleTime = Time.time + RattleInterval;

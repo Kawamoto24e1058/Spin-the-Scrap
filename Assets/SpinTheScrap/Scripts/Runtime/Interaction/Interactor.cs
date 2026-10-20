@@ -1,3 +1,4 @@
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.Player;
 using UnityEngine;
@@ -257,6 +258,7 @@ namespace SpinTheScrap.Interaction
             float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, charge) / Mathf.Pow(Mathf.Max(1f, body.mass), throwMassExponent);
             var dir = (Cam.transform.forward + Vector3.up * 0.1f).normalized;
             body.linearVelocity = dir * speed;
+            Sfx.Play2D(SfxClips.Whoosh, 0.15f + 0.45f * charge, 0.85f + 0.4f * charge);
         }
 
         /// <summary>インベントリから出した物を目の前に置く。壁にめり込まないよう手前に縮める。</summary>

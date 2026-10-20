@@ -1,3 +1,4 @@
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.Interaction;
 using SpinTheScrap.Player;
@@ -37,6 +38,9 @@ namespace SpinTheScrap.Enemies
         float stuckCheckTime;
         float unstickUntil;
         Vector3 unstickDirection;
+        AudioSource drone;
+        EnemyState lastState = EnemyState.Wander;
+        float nextStepTime;
 
         public EnemyState State => brain != null ? brain.State : EnemyState.Wander;
 
@@ -77,6 +81,7 @@ namespace SpinTheScrap.Enemies
             lurker.rng = new Rng(seed);
             lurker.visual = visual;
             lurker.eyeLight = eye;
+            lurker.drone = Sfx.CreateLoop(go, SfxClips.DroneLoop, 0.5f, 18f);
             return lurker;
         }
 
@@ -125,6 +130,32 @@ namespace SpinTheScrap.Enemies
             if (decision.Attack && playerHealth != null) playerHealth.Damage(rules.AttackDamage);
             Move(decision);
             UpdateLook(decision.State);
+            UpdateSound(decision);
+        }
+
+        /// <summary>気配のうなり（追うときは大きく高い）、見つけた瞬間の叫び、ひるんだときのうめき、重い足音。</summary>
+        void UpdateSound(EnemyDecision decision)
+        {
+            var state = decision.State;
+            if (state != lastState)
+            {
+                if (state == EnemyState.Chase) Sfx.PlayAt(SfxClips.Screech, transform.position, 0.9f, Random.Range(0.9f, 1.05f));
+                else if (state == EnemyState.Stunned) Sfx.PlayAt(SfxClips.Groan, transform.position, 0.8f);
+                lastState = state;
+            }
+            if (drone != null)
+            {
+                drone.volume = state == EnemyState.Chase ? 0.85f : state == EnemyState.Stunned ? 0.15f : 0.45f;
+                drone.pitch = state == EnemyState.Chase ? 1.25f : 1f;
+            }
+
+            var v = body.velocity;
+            float speed = new Vector2(v.x, v.z).magnitude;
+            if (speed > 0.5f && Time.time >= nextStepTime)
+            {
+                nextStepTime = Time.time + Mathf.Lerp(0.7f, 0.32f, speed / (float)rules.ChaseSpeed);
+                Sfx.PlayAt(SfxClips.Land, transform.position, 0.35f, Random.Range(0.55f, 0.7f));
+            }
         }
 
         EnemyPerception Perceive()

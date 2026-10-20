@@ -1,4 +1,5 @@
 using System;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using UnityEngine;
 
@@ -16,6 +17,7 @@ namespace SpinTheScrap.Player
         FirstPersonController controller;
         HazardRules rules;
         float lastDamageTime = -10f;
+        float lastHurtSoundTime = -10f;
 
         public HealthState State { get; private set; }
         public bool IsDown => State != null && State.IsDown;
@@ -45,6 +47,12 @@ namespace SpinTheScrap.Player
         public void Damage(double amount)
         {
             if (State == null || amount <= 0 || State.IsDown) return;
+            // 水たまりのように毎フレーム受けるダメージで鳴りっぱなしにならないよう、間を空ける
+            if (Time.time - lastHurtSoundTime > 0.5f)
+            {
+                lastHurtSoundTime = Time.time;
+                Sfx.Play2D(SfxClips.Hurt, Mathf.Clamp01((float)amount / 30f) * 0.5f + 0.35f, UnityEngine.Random.Range(0.9f, 1.05f));
+            }
             lastDamageTime = Time.time;
             if (State.Damage(amount)) Downed?.Invoke();
         }

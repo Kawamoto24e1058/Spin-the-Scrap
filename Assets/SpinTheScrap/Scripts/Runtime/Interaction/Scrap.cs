@@ -1,19 +1,20 @@
 using System;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using UnityEngine;
 
 namespace SpinTheScrap.Interaction
 {
-    /// <summary>
-    /// 廃墟に落ちているガラクタ 1 個。持ち帰るとシンボル（SymbolId）としてリールに入れられる。
-    /// 割れ物は落下や衝突で状態（Integrity）が下がり、強い衝撃で割れる（要件書 4.1）。
-    /// </summary>
     /// <summary>投げたガラクタが当たったときに反応する物（敵など）。</summary>
     public interface IScrapHittable
     {
         void OnHitByScrap(Scrap scrap, float impactSpeed);
     }
 
+    /// <summary>
+    /// 廃墟に落ちているガラクタ 1 個。持ち帰るとシンボル（SymbolId）としてリールに入れられる。
+    /// 割れ物は落下や衝突で状態（Integrity）が下がり、強い衝撃で割れる（要件書 4.1）。
+    /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public sealed class Scrap : MonoBehaviour
     {
@@ -31,6 +32,7 @@ namespace SpinTheScrap.Interaction
         Rigidbody body;
         Renderer[] renderers;
         Color[] originalColors;
+        float nextImpactSoundTime;
 
         public string SymbolId => symbolId;
         public ScrapSize Size => size;
@@ -74,6 +76,7 @@ namespace SpinTheScrap.Interaction
         void Awake()
         {
             renderers = GetComponentsInChildren<Renderer>();
+            nextImpactSoundTime = Time.time + 1f; // 潜行の開始時に置いた物が着地する音は鳴らさない
             ApplyPhysicsDefaults();
         }
 
@@ -91,7 +94,11 @@ namespace SpinTheScrap.Interaction
         {
             float speed = collision.relativeVelocity.magnitude;
             // 手に持って運んでいる間の小さな接触は音にしない
-            if (!IsHeld) World.NoiseEvents.Impact(transform.position, speed);
+            if (!IsHeld)
+            {
+                World.NoiseEvents.Impact(transform.position, speed);
+                PlayImpactSound(speed);
+            }
             var hittable = collision.collider.GetComponentInParent<IScrapHittable>();
             if (hittable != null) hittable.OnHitByScrap(this, speed);
 
@@ -103,7 +110,24 @@ namespace SpinTheScrap.Interaction
             if (IsBroken)
             {
                 World.NoiseEvents.Break(transform.position);
+                Sfx.PlayAt(SfxClips.Shatter, transform.position, 0.9f, UnityEngine.Random.Range(0.9f, 1.1f));
                 Broken?.Invoke(this);
+            }
+        }
+
+        /// <summary>ぶつかった音。小さい物は金属音、大は鈍い音、特大は重い音。速いほど大きい。</summary>
+        void PlayImpactSound(float speed)
+        {
+            const float minSpeed = 1.2f;
+            if (speed < minSpeed || Time.time < nextImpactSoundTime) return;
+            nextImpactSoundTime = Time.time + 0.08f; // 転がっているときに鳴りっぱなしにならないように
+            float volume = Mathf.Clamp01((speed - minSpeed) / 8f) * 0.9f + 0.1f;
+            float pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+            switch (size)
+            {
+                case ScrapSize.Small: Sfx.PlayAt(Sfx.Pick(SfxClips.Clinks), transform.position, volume * 0.7f, pitch); break;
+                case ScrapSize.Large: Sfx.PlayAt(SfxClips.Knock, transform.position, volume, pitch); break;
+                default: Sfx.PlayAt(SfxClips.HeavyThud, transform.position, volume, pitch); break;
             }
         }
 

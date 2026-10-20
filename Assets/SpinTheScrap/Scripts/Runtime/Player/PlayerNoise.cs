@@ -1,3 +1,4 @@
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.World;
 using UnityEngine;
@@ -42,14 +43,19 @@ namespace SpinTheScrap.Player
             float speed = new Vector2(velocity.x, velocity.z).magnitude;
             if (speed < silentSpeed) return;
             nextStepTime = Time.time + stepInterval;
-            float radius = (float)(speed > runSpeedThreshold ? rules.RunNoiseRadius : rules.WalkNoiseRadius);
+            bool running = speed > runSpeedThreshold;
+            float radius = (float)(running ? rules.RunNoiseRadius : rules.WalkNoiseRadius);
             NoiseEvents.Emit(transform.position, radius);
+            if (running) Sfx.Play2D(Sfx.Pick(SfxClips.RunSteps), 0.45f, Random.Range(0.92f, 1.08f));
+            else Sfx.Play2D(Sfx.Pick(SfxClips.Steps), 0.25f, Random.Range(0.9f, 1.1f));
         }
 
         void OnLanded(float speed)
         {
             // 段差を下りただけの着地は数えない
-            if (rules != null && speed > 4f) NoiseEvents.Emit(transform.position, (float)rules.LandNoiseRadius);
+            if (rules == null || speed <= 4f) return;
+            NoiseEvents.Emit(transform.position, (float)rules.LandNoiseRadius);
+            Sfx.Play2D(SfxClips.Land, Mathf.Clamp01(speed / 12f) * 0.8f);
         }
     }
 }

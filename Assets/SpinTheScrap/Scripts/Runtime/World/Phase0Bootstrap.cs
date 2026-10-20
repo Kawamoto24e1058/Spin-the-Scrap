@@ -63,6 +63,7 @@ namespace SpinTheScrap.World
             if (session != null) session.DiveStarted -= OnDiveStarted;
             if (health != null) health.Downed -= OnPlayerDowned;
             Time.timeScale = 1f;
+            AudioListener.pause = false;
         }
 
         /// <summary>倒れたら、持っている物をすべて失って拠点に戻る。運び出し済みの物は残る。</summary>
@@ -96,6 +97,7 @@ namespace SpinTheScrap.World
             panelWasVisible = basePanel.Visible;
             // ソロでは拠点メニューを開いている間は時間を止める（敵も止まる）。フェーズ 1 の協力プレイでは止めない
             Time.timeScale = basePanel.Visible ? 0f : 1f;
+            AudioListener.pause = basePanel.Visible; // 世界の音（敵の気配・ジー・ガタガタ）も止める。UI の音は鳴る
 
             bool playing = !basePanel.Visible && Cursor.lockState == CursorLockMode.Locked;
             player.InputEnabled = playing;
@@ -106,7 +108,11 @@ namespace SpinTheScrap.World
             {
                 bool playerInZone = zone.Contains(player.transform.position);
                 int count = session.Extract(zone, interactor.Inventory, playerInZone, localOwnerId);
-                if (count > 0) basePanel.Visible = true;
+                if (count > 0)
+                {
+                    basePanel.Visible = true;
+                    Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
+                }
             }
         }
 

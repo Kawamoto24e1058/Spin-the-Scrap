@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using SpinTheScrap.Session;
 using UnityEngine;
@@ -91,9 +92,9 @@ namespace SpinTheScrap.UI
                 GUILayout.BeginHorizontal();
                 string condition = item.ValueFactor < 1 ? " (" + Mathf.RoundToInt((float)item.ValueFactor * 100) + "%)" : "";
                 GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(200));
-                if (GUILayout.Button(s.Format("base.sell", session.Money(session.SellPriceOf(item))))) pending = () => session.Sell(item);
+                if (GUILayout.Button(s.Format("base.sell", session.Money(session.SellPriceOf(item))))) pending = () => { session.Sell(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
                 GUI.enabled = session.CanAddToReel(item);
-                if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => session.AddToReel(item);
+                if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => { session.AddToReel(item); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -133,7 +134,7 @@ namespace SpinTheScrap.UI
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(280));
                 GUI.enabled = run.Money >= def.Price && run.Relics.Count < run.Config.MaxRelics;
-                if (GUILayout.Button(s.Format("base.buy", session.Money(def.Price)))) pending = () => run.TryBuyRelic(id);
+                if (GUILayout.Button(s.Format("base.buy", session.Money(def.Price)))) pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -144,7 +145,7 @@ namespace SpinTheScrap.UI
             var s = session.Strings;
             var run = session.Run;
             GUI.enabled = run.CanSpin;
-            if (GUILayout.Button(s.Format("base.spin", session.Money(run.CurrentSpinCost)), GUILayout.Height(40))) pending = () => session.Spin();
+            if (GUILayout.Button(s.Format("base.spin", session.Money(run.CurrentSpinCost)), GUILayout.Height(40))) pending = SpinWithSound;
             GUI.enabled = true;
 
             var spin = session.LastSpin;
@@ -175,6 +176,15 @@ namespace SpinTheScrap.UI
             foreach (var line in spin.Lines)
                 GUILayout.Label("Line " + (line.LineIndex + 1) + "  ×" + line.Length + "  " + TagNames(line.SharedTags) + "  +" + session.Money(line.Bonus));
             if (spin.CornerBonus > 0) GUILayout.Label("Corners  +" + session.Money(spin.CornerBonus));
+        }
+
+        void SpinWithSound()
+        {
+            if (!session.Spin()) return;
+            Sfx.Play2D(SfxClips.Spin, 0.7f);
+            var spin = session.LastSpin;
+            // 回す費用より多く当たったらファンファーレ
+            if (spin.Total >= session.Run.CurrentSpinCost * 2) Sfx.Play2D(SfxClips.Win, 0.6f);
         }
 
         void DrawFlow()
