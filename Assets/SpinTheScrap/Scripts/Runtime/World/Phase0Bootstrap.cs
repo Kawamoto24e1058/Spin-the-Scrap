@@ -255,12 +255,12 @@ namespace SpinTheScrap.World
         static void BuildLighting()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.22f, 0.24f, 0.22f);
+            RenderSettings.ambientLight = new Color(0.34f, 0.36f, 0.34f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.04f, 0.05f, 0.04f);
-            RenderSettings.fogStartDistance = 6f;
-            RenderSettings.fogEndDistance = 26f;
+            RenderSettings.fogStartDistance = 8f;
+            RenderSettings.fogEndDistance = 32f;
 
             foreach (var light in FindObjectsByType<Light>()) light.gameObject.SetActive(false);
         }

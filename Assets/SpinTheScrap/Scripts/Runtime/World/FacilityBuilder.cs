@@ -62,10 +62,13 @@ namespace SpinTheScrap.World
         public const float DoorWidth = 3.2f;
         public const float DoorHeight = 3f;
         const float WallThickness = 0.3f;
+        /// <summary>部屋の明かりの強さと届く距離の倍率（暗さの調整はここで一括で行う）。</summary>
+        const float LightIntensityScale = 1.5f;
+        const float LightRangeScale = 1.2f;
 
-        static readonly Color WallColor = new Color(0.22f, 0.25f, 0.21f);
-        static readonly Color FloorColor = new Color(0.18f, 0.17f, 0.15f);
-        static readonly Color PropColor = new Color(0.3f, 0.26f, 0.22f);
+        static readonly Color WallColor = new Color(0.34f, 0.37f, 0.32f);
+        static readonly Color FloorColor = new Color(0.3f, 0.28f, 0.25f);
+        static readonly Color PropColor = new Color(0.44f, 0.37f, 0.3f);
         static readonly Color EmergencyColor = new Color(0.5f, 1f, 0.6f);
         static readonly Color WarmColor = new Color(1f, 0.9f, 0.7f);
 
@@ -284,8 +287,8 @@ namespace SpinTheScrap.World
             var light = go.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = color;
-            light.range = range;
-            light.intensity = intensity;
+            light.range = range * LightRangeScale;
+            light.intensity = intensity * LightIntensityScale;
             light.shadows = LightShadows.Soft;
         }
     }
