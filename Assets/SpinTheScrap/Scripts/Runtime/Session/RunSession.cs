@@ -37,6 +37,7 @@ namespace SpinTheScrap.Session
         public ContentDatabase Content { get; private set; }
         public StringTable Strings { get; private set; }
         public RunState Run { get; private set; }
+        public HazardRules Hazards { get; } = new HazardRules();
         public IReadOnlyList<HaulItem> Haul => haul;
         public SpinResult LastSpin { get; private set; }
         /// <summary>直前の操作の結果メッセージ（返済結果など）。</summary>
@@ -77,6 +78,12 @@ namespace SpinTheScrap.Session
                 Destroy(scrap.gameObject);
             }
             return scraps.Count;
+        }
+
+        /// <summary>潜行中に倒れた。持っていた物は失い、運び出し済みの物（Haul）は残る。</summary>
+        public void ReportDowned(int lostCount)
+        {
+            Message = Strings.Format("base.downed", lostCount);
         }
 
         public double SellPriceOf(HaulItem item) => Math.Floor(Content.GetSymbol(item.SymbolId).SellPrice * item.ValueFactor);

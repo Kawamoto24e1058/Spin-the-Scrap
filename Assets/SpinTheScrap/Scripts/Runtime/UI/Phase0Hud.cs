@@ -17,16 +17,18 @@ namespace SpinTheScrap.UI
         FirstPersonController player;
         Interactor interactor;
         ExtractionZone zone;
+        PlayerHealth health;
         GUIStyle label;
         GUIStyle center;
         int extractableCount;
 
-        public void Init(RunSession runSession, FirstPersonController fpc, Interactor playerInteractor, ExtractionZone extractionZone)
+        public void Init(RunSession runSession, FirstPersonController fpc, Interactor playerInteractor, ExtractionZone extractionZone, PlayerHealth playerHealth)
         {
             session = runSession;
             player = fpc;
             interactor = playerInteractor;
             zone = extractionZone;
+            health = playerHealth;
         }
 
         void Update()
@@ -44,6 +46,15 @@ namespace SpinTheScrap.UI
             var s = session.Strings;
             var run = session.Run;
 
+            // ダメージを受けた直後は画面のふちを赤くする
+            if (health != null && health.DamageFlash > 0f)
+            {
+                var prev = GUI.color;
+                GUI.color = new Color(0.8f, 0f, 0f, 0.35f * health.DamageFlash);
+                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+                GUI.color = prev;
+            }
+
             // 照準
             ShadowLabel(new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24), "+", center);
 
@@ -53,6 +64,18 @@ namespace SpinTheScrap.UI
             ShadowLabel(new Rect(16, 12, 900, 24), status, label);
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
+            if (health != null && health.State != null)
+            {
+                var hp = health.State;
+                ShadowLabel(new Rect(16, 84, 400, 24), s.Format("hud.health", Mathf.CeilToInt((float)hp.Current), Mathf.RoundToInt((float)hp.Max)), label);
+                var bar = new Rect(16, 108, 160, 6);
+                var prev = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, 0.6f);
+                GUI.DrawTexture(bar, Texture2D.whiteTexture);
+                GUI.color = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.5f, 0.9f, 0.5f), (float)(hp.Current / hp.Max));
+                GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * (float)(hp.Current / hp.Max), bar.height), Texture2D.whiteTexture);
+                GUI.color = prev;
+            }
 
             // 照準の下：投げる力のゲージ、見ている物・持っている物
             float y = Screen.height / 2f + 24;

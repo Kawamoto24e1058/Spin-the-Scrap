@@ -24,6 +24,7 @@ namespace SpinTheScrap.World
         RunSession session;
         FirstPersonController player;
         Interactor interactor;
+        PlayerHealth health;
         ExtractionZone zone;
         Flashlight flashlight;
         BasePanel basePanel;
@@ -43,9 +44,11 @@ namespace SpinTheScrap.World
             if (session == null) session = gameObject.AddComponent<RunSession>();
             session.DiveStarted += OnDiveStarted;
             spawnRng = new Rng((ulong)System.Environment.TickCount);
+            health.Init(session.Hazards);
+            health.Downed += OnPlayerDowned;
 
             var hud = gameObject.AddComponent<Phase0Hud>();
-            hud.Init(session, player, interactor, zone);
+            hud.Init(session, player, interactor, zone, health);
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
 
@@ -56,14 +59,27 @@ namespace SpinTheScrap.World
         void OnDestroy()
         {
             if (session != null) session.DiveStarted -= OnDiveStarted;
+            if (health != null) health.Downed -= OnPlayerDowned;
+        }
+
+        /// <summary>倒れたら、持っている物をすべて失って拠点に戻る。運び出し済みの物は残る。</summary>
+        void OnPlayerDowned()
+        {
+            interactor.ReleaseHeld();
+            var lost = interactor.Inventory.TakeAll();
+            foreach (var scrap in lost) Destroy(scrap.gameObject);
+            session.ReportDowned(lost.Count);
+            basePanel.Visible = true;
         }
 
         void Update()
         {
-            if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
+            // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
+            if (health.IsDown) basePanel.Visible = true;
+            else if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
             if (GameInput.EscapePressed)
             {
-                if (basePanel.Visible) basePanel.Visible = false;
+                if (basePanel.Visible && !health.IsDown) basePanel.Visible = false;
                 else SetCursorLocked(false);
             }
             else if (!basePanel.Visible && Cursor.lockState != CursorLockMode.Locked && GameInput.AnyMouseButtonPressed)
@@ -107,6 +123,8 @@ namespace SpinTheScrap.World
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
+            SpawnHazards();
+            health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
             player.transform.SetPositionAndRotation(playerSpawn, Quaternion.identity);
@@ -135,6 +153,20 @@ namespace SpinTheScrap.World
                 spawnRng.Shuffle(spots);
                 int count = Mathf.Min(LootTable.ScrapCountFor(room.Plan.Kind, room.Plan.Depth), spots.Count);
                 for (int i = 0; i < count; i++) Place(PickWeighted(others, spots[i].Depth), spots[i].Position);
+            }
+        }
+
+        /// <summary>入口以外の部屋に、深さに応じた確率で電気が流れる水たまりを置く。</summary>
+        void SpawnHazards()
+        {
+            var rules = session.Hazards;
+            var content = session.Content;
+            foreach (var room in facility.Rooms)
+            {
+                if (!room.PuddleSpot.HasValue) continue;
+                if (spawnRng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
+                var puddle = FacilityBuilder.CreatePuddle(room.Root, room.PuddleSpot.Value, out var surface, out var glow);
+                puddle.Init(rules, id => content.GetSymbol(id).Tags, health, surface, glow);
             }
         }
 
@@ -213,6 +245,7 @@ namespace SpinTheScrap.World
             player.SetCamera(cam);
             go.AddComponent<Inventory>();
             interactor = go.AddComponent<Interactor>();
+            health = go.AddComponent<PlayerHealth>();
         }
     }
 }

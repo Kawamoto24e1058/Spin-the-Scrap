@@ -45,6 +45,8 @@ namespace SpinTheScrap.Player
         public bool RunBlocked { get; set; }
         /// <summary>重さとは別に掛ける移動速度の倍率（特大を引きずるときなど）。</summary>
         public float SpeedMultiplier { get; set; } = 1f;
+        /// <summary>空中から着地した。引数は着地の速さ (m/s、下向きを正)。</summary>
+        public event System.Action<float> Landed;
         public float LoadFactor => Mathf.Clamp01(LoadKg / maxLoadKg);
 
         public void SetCamera(Camera cam) => viewCamera = cam;
@@ -104,7 +106,10 @@ namespace SpinTheScrap.Player
             verticalVelocity += gravity * Time.deltaTime;
             float vertical = (previousVertical + verticalVelocity) * 0.5f;
 
+            bool wasGrounded = controller.isGrounded;
             controller.Move((horizontal + Vector3.up * vertical) * Time.deltaTime);
+            // 実際に動かした速さ（前後の平均）で判定し、フレームレートで落下ダメージが変わらないようにする
+            if (!wasGrounded && controller.isGrounded && vertical < 0f) Landed?.Invoke(-vertical);
         }
 
         /// <summary>引き綱の長さを超えて離れる方向の速度を取り除く。近づく・回り込む動きはそのまま。</summary>

@@ -36,10 +36,12 @@ namespace SpinTheScrap.Interaction
         [SerializeField] float heldAngularDamping = 6f;
 
         [Header("Throw")]
-        [Tooltip("右クリックを軽く押しただけのときの、1kg の物の初速 (m/s)。重いほど √質量 に反比例して遅くなる")]
-        [SerializeField] float minThrowSpeed = 3f;
+        [Tooltip("右クリックを軽く押しただけのときの、1kg の物の初速 (m/s)")]
+        [SerializeField] float minThrowSpeed = 5f;
         [Tooltip("最後までためたときの、1kg の物の初速 (m/s)")]
-        [SerializeField] float maxThrowSpeed = 12f;
+        [SerializeField] float maxThrowSpeed = 18f;
+        [Tooltip("重さで初速が落ちる度合い。初速 ÷ 質量^この値。0.5 なら √質量（8kg で約 1/2.8）、0.35 なら 8kg で約 1/2")]
+        [SerializeField, Range(0, 1)] float throwMassExponent = 0.35f;
         [Tooltip("押し始めてから最大までたまる時間 (s)")]
         [SerializeField] float throwChargeTime = 0.8f;
         [Tooltip("1 人で抱えたときの重さとして数える、特大の質量の割合")]
@@ -183,6 +185,13 @@ namespace SpinTheScrap.Interaction
             SetIgnorePlayerCollision(true);
         }
 
+        /// <summary>手に持っている物をその場で離す（倒れたときなど）。</summary>
+        public void ReleaseHeld()
+        {
+            chargeStartTime = -1f;
+            Release();
+        }
+
         void Release()
         {
             if (held != null)
@@ -211,7 +220,7 @@ namespace SpinTheScrap.Interaction
 
         void Launch(Rigidbody body, float charge)
         {
-            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, charge) / Mathf.Sqrt(Mathf.Max(1f, body.mass));
+            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, charge) / Mathf.Pow(Mathf.Max(1f, body.mass), throwMassExponent);
             var dir = (Cam.transform.forward + Vector3.up * 0.1f).normalized;
             body.linearVelocity = dir * speed;
         }

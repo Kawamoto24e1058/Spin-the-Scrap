@@ -59,6 +59,7 @@ hud.broken,割れている,Broken
 hud.load,重量 {0} kg,Load {0} kg
 hud.extract,[F] ガラクタを運び出す（{0}個）,[F] Extract scrap ({0})
 hud.haul,運び出したガラクタ：{0}個,Extracted scrap: {0}
+hud.health,体力 {0}/{1},Health {0}/{1}
 hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / Tab Base menu
 # --- 拠点メニュー ---
 base.title,拠点（ボロアパート）,Base (Shabby Apartment)
@@ -81,3 +82,4 @@ base.cleared,完済！以降はエンドレス。,Debt cleared! Endless mode fro
 base.failed,ノルマ未達。ラン終了。,Quota missed. Run over.
 base.new_run,新しいラン,New run
 base.enemy_bonus,次の潜行で敵 +{0},Next dive enemies +{0}
+base.downed,倒れた。持っていたガラクタ{0}個を失った。,You went down. Lost {0} scrap you were carrying.

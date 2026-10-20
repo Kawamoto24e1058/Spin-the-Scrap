@@ -25,6 +25,10 @@ namespace SpinTheScrap.World
         public readonly List<ScrapSpot> Spots = new List<ScrapSpot>();
         /// <summary>特大を置ける広い床（入口にはない）。</summary>
         public Vector3? HugeSpot;
+        /// <summary>電気が流れる水たまりを置ける床（入口にはない）。ドアの前の通路にかかるので、回り込むかショートさせる。</summary>
+        public Vector3? PuddleSpot;
+        /// <summary>この部屋のオブジェクトの親。</summary>
+        public Transform Root;
     }
 
     /// <summary>
@@ -55,7 +59,7 @@ namespace SpinTheScrap.World
                 var root = new GameObject("Room " + plan.X + "," + plan.Y + " " + plan.Kind).transform;
                 root.SetParent(facility.Root, false);
                 root.localPosition = RoomCenter(plan);
-                var room = new BuiltRoom { Plan = plan };
+                var room = new BuiltRoom { Plan = plan, Root = root };
                 BuildShell(root, layout, plan);
                 switch (plan.Kind)
                 {
@@ -72,6 +76,7 @@ namespace SpinTheScrap.World
                     room.Spots[i] = spot;
                 }
                 if (room.HugeSpot.HasValue) room.HugeSpot = root.TransformPoint(room.HugeSpot.Value);
+                if (room.PuddleSpot.HasValue) room.PuddleSpot = root.TransformPoint(room.PuddleSpot.Value);
                 facility.Rooms.Add(room);
             }
             return facility;
@@ -145,6 +150,7 @@ namespace SpinTheScrap.World
             Floor(room, -7f, -3f, 7f, 3f, -3f, 8f, 3f, -8f, -9f, -9f, 9f, -9f, -2f, 3f);
             Raised(room, 0.8f, -8f, -8f, 8f, 8f, -8f, 7f);
             room.HugeSpot = new Vector3(0f, 0f, -5f);
+            room.PuddleSpot = new Vector3(0f, 0f, 5f);
         }
 
         static void BuildStorage(Transform root, BuiltRoom room)
@@ -159,6 +165,7 @@ namespace SpinTheScrap.World
             Floor(room, -4f, 6f, 4f, -6f, -9.5f, -6f, 9.5f, 6f, 3.5f, 3.5f, -3.5f, -3.5f, 9f, -10f, -9f, 10f);
             Raised(room, 1.2f, -6.5f, -5f, -6.5f, -8f, 6.5f, 5f, 6.5f, 8f, -6.5f, 5f, 6.5f, -5f);
             room.HugeSpot = new Vector3(-5f, 0f, 0f);
+            room.PuddleSpot = new Vector3(4.5f, 0f, 0f);
         }
 
         static void BuildLoft(Transform root, BuiltRoom room)
@@ -182,6 +189,37 @@ namespace SpinTheScrap.World
             Raised(room, 2f, 7f, 6f, 9f, 9f, 10f, 5f, 7.5f, 10f);
             Raised(room, 1f, -8f, -6f, -6.5f, -6f);
             room.HugeSpot = new Vector3(-5f, 0f, 0f);
+            room.PuddleSpot = new Vector3(0f, 0f, -5f);
+        }
+
+        // ---- ハザード ----
+
+        /// <summary>電気が流れる水たまりを作る。Init（数値と対象の指定）は呼び出し側で行う。</summary>
+        public static ElectricPuddle CreatePuddle(Transform parent, Vector3 worldPosition, out Renderer surface, out Light glow)
+        {
+            const float size = 3.5f;
+            var go = new GameObject("Electric puddle");
+            go.transform.SetParent(parent, true);
+            go.transform.position = worldPosition;
+            var box = go.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, 0.5f, 0f);
+            box.size = new Vector3(size, 1f, size);
+
+            var water = Block(go.transform, "Water", Vector3.zero, new Vector3(size, 0.02f, size), new Color(0.25f, 0.55f, 1f));
+            water.localPosition = new Vector3(0f, 0.012f, 0f);
+            Object.Destroy(water.GetComponent<Collider>());
+            surface = water.GetComponent<Renderer>();
+
+            var lightGo = new GameObject("Spark light");
+            lightGo.transform.SetParent(go.transform, false);
+            lightGo.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+            glow = lightGo.AddComponent<Light>();
+            glow.type = LightType.Point;
+            glow.color = new Color(0.45f, 0.7f, 1f);
+            glow.range = 4f;
+            glow.intensity = 3f;
+
+            return go.AddComponent<ElectricPuddle>();
         }
 
         // ---- 部品 ----
