@@ -35,6 +35,20 @@ namespace SpinTheScrap.Interaction
         [SerializeField, Range(0, 1)] float hugeDragSpeedFactor = 0.35f;
         [SerializeField] float heldAngularDamping = 6f;
 
+        [Header("Cart")]
+        [Tooltip("取っ手を保つ、自分の前の距離 (m)")]
+        [SerializeField] float cartPushDistance = 0.95f;
+        [Tooltip("取っ手がこれ以上離れたら手を離す (m)")]
+        [SerializeField] float cartBreakDistance = 1.8f;
+        [Tooltip("押している間、取っ手からこれ以上は離れられない (m)")]
+        [SerializeField] float cartTetherLength = 1.3f;
+        [SerializeField] float cartStiffness = 60f;
+        [SerializeField] float cartDamping = 12f;
+        [Tooltip("押す力の上限（加速度 m/s²）。台車と荷物の重さに掛ける")]
+        [SerializeField] float cartMaxForce = 25f;
+        [SerializeField] float cartTurnStiffness = 40f;
+        [SerializeField] float cartTurnDamping = 9f;
+
         [Header("Throw")]
         [Tooltip("右クリックを軽く押しただけのときの、1kg の物の初速 (m/s)")]
         [SerializeField] float minThrowSpeed = 5f;
@@ -55,8 +69,13 @@ namespace SpinTheScrap.Interaction
         Collider[] heldColliders;
         Vector3 hoverPoint;
         float chargeStartTime = -1f;
+        Cart pushed;
 
         public Scrap Hovered { get; private set; }
+        /// <summary>見ている台車（ガラクタを見ていないとき）。</summary>
+        public Cart HoveredCart { get; private set; }
+        /// <summary>押している台車。</summary>
+        public Cart Pushed => pushed;
         public Scrap Held => held;
         public Inventory Inventory => inventory;
         public bool InventoryFullFeedback { get; private set; }
@@ -77,6 +96,7 @@ namespace SpinTheScrap.Interaction
         {
             // 持っている物が破棄・回収されたら手を空ける（Unity の == null は破棄済みも null 扱い）
             if (!ReferenceEquals(held, null) && (held == null || !held.gameObject.activeInHierarchy)) Release();
+            if (!ReferenceEquals(pushed, null) && pushed == null) StopPushing(); // 潜行が終わって台車が消えた
 
             if (controller.InputEnabled)
             {
@@ -86,19 +106,22 @@ namespace SpinTheScrap.Interaction
             else
             {
                 Hovered = null;
+                HoveredCart = null;
                 chargeStartTime = -1f; // メニューを開いたらためを取り消す
             }
 
             controller.LoadKg = CurrentLoadKg();
-            controller.RunBlocked = held != null && held.Size != ScrapSize.Small;
+            controller.RunBlocked = (held != null && held.Size != ScrapSize.Small) || pushed != null;
             bool draggingHuge = held != null && held.Size == ScrapSize.Huge;
             if (draggingHuge) controller.SetTether(held.transform.TransformPoint(heldLocalAnchor), hugeTetherLength);
+            else if (pushed != null) controller.SetTether(pushed.HandlePoint, cartTetherLength);
             else controller.ClearTether();
-            controller.SpeedMultiplier = draggingHuge ? hugeDragSpeedFactor : 1f;
+            controller.SpeedMultiplier = draggingHuge ? hugeDragSpeedFactor : pushed != null ? pushed.SpeedFactor : 1f;
         }
 
         void FixedUpdate()
         {
+            if (pushed != null) DrivePushed();
             if (held == null) return;
             DriveHeld();
         }
@@ -106,10 +129,17 @@ namespace SpinTheScrap.Interaction
         void UpdateHover()
         {
             Hovered = null;
+            HoveredCart = null;
             if (Cam == null) return;
             var ray = new Ray(Cam.transform.position, Cam.transform.forward);
             if (!Physics.Raycast(ray, out var hit, reach, ~0, QueryTriggerInteraction.Ignore)) return;
             if (hit.rigidbody == null) return;
+            var cart = hit.rigidbody.GetComponent<Cart>();
+            if (cart != null && cart != pushed)
+            {
+                HoveredCart = cart;
+                return;
+            }
             var scrap = hit.rigidbody.GetComponent<Scrap>();
             if (scrap == null || scrap == held) return;
             Hovered = scrap;
@@ -124,15 +154,18 @@ namespace SpinTheScrap.Interaction
             if (GameInput.InteractPressed)
             {
                 InventoryFullFeedback = false;
-                if (held != null) Release();
+                if (pushed != null) StopPushing();
+                else if (held != null) Release();
                 else if (Hovered != null) PickUp(Hovered, hoverPoint);
+                else if (HoveredCart != null) StartPushing(HoveredCart);
             }
 
             HandleThrowInput();
 
             if (GameInput.DropPressed)
             {
-                if (held != null) Release();
+                if (pushed != null) StopPushing();
+                else if (held != null) Release();
                 else if (inventory.Selected != null) PlaceInFront(inventory.TakeSelected());
             }
         }
@@ -190,6 +223,7 @@ namespace SpinTheScrap.Interaction
         {
             chargeStartTime = -1f;
             Release();
+            StopPushing();
         }
 
         void Release()
@@ -284,6 +318,66 @@ namespace SpinTheScrap.Interaction
                 if (c != null) Physics.IgnoreCollision(c, controller.Controller, ignore);
         }
 
-        void OnDisable() => Release();
+        // ---- 台車 ----
+
+        void StartPushing(Cart cart)
+        {
+            pushed = cart;
+            cart.IsPushed = true;
+            SetIgnoreCartCollision(cart, true); // 押している台車に自分がぶつからないように
+        }
+
+        void StopPushing()
+        {
+            if (pushed != null)
+            {
+                pushed.IsPushed = false;
+                SetIgnoreCartCollision(pushed, false);
+            }
+            pushed = null;
+        }
+
+        /// <summary>取っ手を自分の前に保つよう、水平の力と向きをそろえる回転をかける。</summary>
+        void DrivePushed()
+        {
+            var body = pushed.Body;
+            var forward = Cam.transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.001f) forward = transform.forward;
+            forward.Normalize();
+
+            var handle = pushed.HandlePoint;
+            var target = transform.position + forward * cartPushDistance;
+            var offset = target - handle;
+            offset.y = 0f;
+            if (offset.magnitude > cartBreakDistance)
+            {
+                StopPushing();
+                return;
+            }
+
+            var velocity = body.linearVelocity;
+            velocity.y = 0f;
+            var force = offset * cartStiffness - velocity * cartDamping;
+            body.AddForce(Vector3.ClampMagnitude(force, cartMaxForce) * body.mass, ForceMode.Force);
+
+            // 台車の前（+Z）を自分の向きにそろえる
+            float angle = Vector3.SignedAngle(Vector3.ProjectOnPlane(pushed.transform.forward, Vector3.up), forward, Vector3.up);
+            float yawAccel = angle * Mathf.Deg2Rad * cartTurnStiffness - body.angularVelocity.y * cartTurnDamping;
+            body.AddTorque(Vector3.up * yawAccel, ForceMode.Acceleration);
+        }
+
+        void SetIgnoreCartCollision(Cart cart, bool ignore)
+        {
+            if (cart.Colliders == null) return;
+            foreach (var c in cart.Colliders)
+                if (c != null) Physics.IgnoreCollision(c, controller.Controller, ignore);
+        }
+
+        void OnDisable()
+        {
+            Release();
+            StopPushing();
+        }
     }
 }

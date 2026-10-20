@@ -130,6 +130,8 @@ namespace SpinTheScrap.World
             SpawnScrap();
             SpawnHazards();
             SpawnEnemies(enemyBonus);
+            // 台車は入口に 1 台（のちに店で買う道具にする想定）
+            Cart.Spawn(facility.Root, new Vector3(6f, 0.05f, -9f), Quaternion.identity, session.Tools);
             health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない

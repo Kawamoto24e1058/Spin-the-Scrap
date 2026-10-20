@@ -84,7 +84,19 @@ namespace SpinTheScrap.UI
                 DrawChargeBar(new Rect(Screen.width / 2f - 60, y - 8, 120, 6), interactor.ThrowCharge);
                 y += 6;
             }
-            if (interactor.Held != null)
+            if (interactor.Pushed != null)
+            {
+                var cart = interactor.Pushed;
+                Line(s.Format("hud.cart_load", cart.LoadCount, cart.LoadKg.ToString("0")), ref y);
+                Line(s.Get("hud.pushing_cart"), ref y);
+            }
+            else if (interactor.HoveredCart != null)
+            {
+                var cart = interactor.HoveredCart;
+                Line(s.Format("hud.cart_load", cart.LoadCount, cart.LoadKg.ToString("0")), ref y);
+                Line(s.Get("hud.push_cart"), ref y);
+            }
+            else if (interactor.Held != null)
             {
                 DescribeScrap(interactor.Held, ref y);
                 Line(s.Get(interactor.Held.Size == ScrapSize.Huge ? "hud.holding_huge" : "hud.holding"), ref y);

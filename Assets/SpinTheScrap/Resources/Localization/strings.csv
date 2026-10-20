@@ -60,6 +60,9 @@ hud.load,重量 {0} kg,Load {0} kg
 hud.extract,[F] ガラクタを運び出す（{0}個）,[F] Extract scrap ({0})
 hud.haul,運び出したガラクタ：{0}個,Extracted scrap: {0}
 hud.health,体力 {0}/{1},Health {0}/{1}
+hud.push_cart,[E] 台車を押す,[E] Push the cart
+hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)
+hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
 hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / Tab Base menu
 # --- 拠点メニュー ---
 base.title,拠点（ボロアパート）,Base (Shabby Apartment)
