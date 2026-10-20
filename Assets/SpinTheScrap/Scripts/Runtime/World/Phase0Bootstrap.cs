@@ -26,7 +26,7 @@ namespace SpinTheScrap.World
         FirstPersonController player;
         Interactor interactor;
         PlayerHealth health;
-        ExtractionZone zone;
+        MachineCabinet currentCabinet;
         Flashlight flashlight;
         BasePanel basePanel;
         Transform scrapRoot;
@@ -42,7 +42,6 @@ namespace SpinTheScrap.World
         {
             DisableOtherCameras();
             BuildLighting();
-            BuildExtractionZone();
             BuildPlayer();
 
             session = GetComponent<RunSession>();
@@ -57,7 +56,8 @@ namespace SpinTheScrap.World
             Enemy.AnyDied += OnEnemyDied;
 
             var hud = gameObject.AddComponent<Phase0Hud>();
-            hud.Init(session, player, interactor, zone, health);
+            hud.Init(session, player, interactor, health);
+            session.Spun += OnSpun;
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
 
@@ -67,7 +67,11 @@ namespace SpinTheScrap.World
 
         void OnDestroy()
         {
-            if (session != null) session.FloorStarted -= OnFloorStarted;
+            if (session != null)
+            {
+                session.FloorStarted -= OnFloorStarted;
+                session.Spun -= OnSpun;
+            }
             if (health != null) health.Downed -= OnPlayerDowned;
             Enemy.AnyDied -= OnEnemyDied;
             Time.timeScale = 1f;
@@ -178,16 +182,6 @@ namespace SpinTheScrap.World
             UpdateTools();
             ApplyStats();
             UpdateCrawlers();
-            if (GameInput.ExtractPressed)
-            {
-                bool playerInZone = zone.Contains(player.transform.position);
-                int count = session.Extract(zone, interactor.Inventory, playerInZone, localOwnerId);
-                if (count > 0)
-                {
-                    basePanel.Visible = true;
-                    Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
-                }
-            }
         }
 
         /// <summary>懐中電灯の電池、包帯（H）、爆竹（Q）。数と使えるかどうかは RunState（Core）が決める。</summary>
@@ -241,9 +235,10 @@ namespace SpinTheScrap.World
             nextCrawlerTime = Time.time + 3f;
             if (!session.Run.IsBossFloor)
                 for (int i = 0; i < session.Enemies.CrawlerPopulationFor(session.Run.Floor); i++) SpawnCrawler(awayFromPlayer: true);
-            // 台車は道具屋で買っていれば入口に 1 台
+            // 台車は道具スロットで当てていれば入口に 1 台
             if (session.Run.HasTool(ToolIds.Cart))
-                Cart.Spawn(facility.Root, new Vector3(6f, 0.05f, -9f), Quaternion.identity, session.Tools);
+                Cart.Spawn(facility.Root, new Vector3(4f, 0.05f, -5f), Quaternion.identity, session.Tools);
+            PlaceMachines();
             health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
@@ -334,7 +329,7 @@ namespace SpinTheScrap.World
             return candidates[candidates.Count - 1];
         }
 
-        // ---- 照明・脱出地点・プレイヤー ----
+        // ---- 照明・プレイヤー ----
 
         static void DisableOtherCameras()
         {
@@ -354,16 +349,58 @@ namespace SpinTheScrap.World
             foreach (var light in FindObjectsByType<Light>()) light.gameObject.SetActive(false);
         }
 
-        void BuildExtractionZone()
-        {
-            var pad = FacilityBuilder.Block(null, "Extraction pad", new Vector3(0f, 0.01f, -10f), new Vector3(6f, 0.02f, 3f), new Color(0.2f, 0.6f, 0.3f));
-            Destroy(pad.GetComponent<Collider>());
+        // ---- スロット台とエレベーター ----
 
-            var go = new GameObject("Extraction zone");
-            go.transform.position = new Vector3(0f, 1.5f, -10f);
-            var box = go.AddComponent<BoxCollider>();
-            box.size = new Vector3(6f, 3f, 3f);
-            zone = go.AddComponent<ExtractionZone>();
+        /// <summary>
+        /// 入口の部屋に武器・強化・道具のスロット台とエレベーター。ボス階層では改造スロットも。
+        /// 通常の階では、いちばん奥の部屋にもう 1 台（強化か道具）。
+        /// </summary>
+        void PlaceMachines()
+        {
+            var root = facility.Root;
+            var kinds = new List<MachineKind> { MachineKind.Weapon, MachineKind.Perk, MachineKind.Tool };
+            if (session.Run.IsBossFloor) kinds.Add(MachineKind.Mod);
+            for (int i = 0; i < kinds.Count; i++)
+                MachineCabinet.Create(root, new Vector3(-4.5f + i * 3f, 0f, -11.3f), Vector3.forward, kinds[i], UseMachine);
+
+            Elevator.Create(root, new Vector3(9.2f, 0f, -9.2f), Vector3.left, () => session.Run.Objective.IsComplete && !session.Run.IsOver,
+                strings => session.Run.IsLastFloor ? strings.Get("hud.elevator_exit") : strings.Format("hud.elevator_ready", session.Run.Floor + 1),
+                RideElevator);
+
+            if (session.Run.IsBossFloor) return;
+            var deepest = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance).OrderByDescending(r => r.Plan.Depth).FirstOrDefault();
+            if (deepest == null) return;
+            var extra = spawnRng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;
+            MachineCabinet.Create(root, FacilityBuilder.RoomCenter(deepest.Plan) + new Vector3(8f, 0f, -10.3f), Vector3.forward, extra, UseMachine);
+        }
+
+        /// <summary>スロット台を使う：持っている物と台の前に置いた物をすべて入れて、その台のメニューを開く。</summary>
+        void UseMachine(MachineCabinet cabinet, Interactor who)
+        {
+            var scraps = cabinet.Hopper.ScrapsInside();
+            scraps.AddRange(who.Inventory.TakeAll());
+            var held = who.TakeHeld();
+            if (held != null && !scraps.Contains(held)) scraps.Add(held);
+            int fed = session.Feed(scraps, localOwnerId);
+            if (fed > 0) Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
+            currentCabinet = cabinet;
+            basePanel.Machine = cabinet.Kind;
+            basePanel.Visible = true;
+        }
+
+        /// <summary>回すと台から大きな音がして、敵が寄ってくる（大当たりはもっと大きい）。メニューを閉じると敵が動き出す。</summary>
+        void OnSpun(MachineOutcome outcome)
+        {
+            var position = currentCabinet != null ? currentCabinet.transform.position : player.transform.position;
+            var rules = session.Run.MachineRules;
+            NoiseEvents.Emit(position, (float)(outcome.Reading.Jackpot ? rules.JackpotNoiseRadius : rules.SpinNoiseRadius));
+        }
+
+        void RideElevator()
+        {
+            if (!session.TryAdvanceFloor()) return;
+            Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f, 0.8f);
+            if (session.Run.IsOver) basePanel.Visible = true;
         }
 
         void BuildPlayer()

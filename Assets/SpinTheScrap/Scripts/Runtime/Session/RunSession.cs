@@ -73,14 +73,11 @@ namespace SpinTheScrap.Session
         }
 
         /// <summary>
-        /// スロット台の投入口の中のガラクタと、プレイヤーの持ち物をすべて台に入れる。
-        /// 入れた物は「換金する」か「どの台のリールに入れるか」を台のメニューで選ぶ。
+        /// ガラクタをスロット台に入れる（持っている物・台の前に置いた物）。入れた物は台のメニューで
+        /// 「換金する」か「どの台のリールに入れるか」を選ぶ。入れた数を返す。
         /// </summary>
-        public int Extract(ExtractionZone zone, Inventory inventory, bool playerInZone, int ownerId)
+        public int Feed(List<Scrap> scraps, int ownerId)
         {
-            var scraps = zone.ScrapsInside();
-            if (playerInZone) scraps.AddRange(inventory.TakeAll());
-
             double brokenRatio = Run.BrokenFragileValueRatio;
             foreach (var scrap in scraps)
             {

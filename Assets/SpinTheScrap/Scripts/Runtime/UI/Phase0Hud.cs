@@ -16,29 +16,18 @@ namespace SpinTheScrap.UI
         RunSession session;
         FirstPersonController player;
         Interactor interactor;
-        ExtractionZone zone;
         PlayerHealth health;
         PlayerCombat combat;
         GUIStyle label;
         GUIStyle center;
-        int extractableCount;
 
-        public void Init(RunSession runSession, FirstPersonController fpc, Interactor playerInteractor, ExtractionZone extractionZone, PlayerHealth playerHealth)
+        public void Init(RunSession runSession, FirstPersonController fpc, Interactor playerInteractor, PlayerHealth playerHealth)
         {
             session = runSession;
             player = fpc;
             interactor = playerInteractor;
-            zone = extractionZone;
             health = playerHealth;
             combat = fpc.GetComponent<PlayerCombat>();
-        }
-
-        void Update()
-        {
-            if (zone == null) return;
-            // OverlapBox を OnGUI で毎回呼ばないよう、フレームに 1 回だけ数える
-            extractableCount = zone.ScrapsInside().Count;
-            if (zone.Contains(player.transform.position)) extractableCount += interactor.Inventory.Items.Count();
         }
 
         void OnGUI()
@@ -114,7 +103,7 @@ namespace SpinTheScrap.UI
             }
             if (interactor.InventoryFullFeedback) Line(s.Get("hud.inventory_full"), ref y);
 
-            if (extractableCount > 0) Line(s.Format("hud.extract", extractableCount), ref y);
+            if (interactor.HoveredInteractable != null) Line(interactor.HoveredInteractable.Prompt(s), ref y);
             if (combat != null && Time.time - combat.WeaponBrokeTime < 2f) Line(s.Get("hud.weapon_broke"), ref y);
             if (run.Objective.IsComplete && !run.IsOver) Line(s.Get("hud.objective_done"), ref y);
             DrawWeapon();

@@ -5,7 +5,7 @@ symbol.empty_can.desc,どこにでもある。リールの最初の住人。,It'
 symbol.rusty_screw.name,錆びたネジ,Rusty Screw
 symbol.rusty_screw.desc,隣接する金属1つにつき+1。,+1 for each adjacent Metal.
 symbol.mannequin_head.name,マネキンの首,Mannequin Head
-symbol.mannequin_head.desc,呪いが3つ以上で盤面×2。代わりに次の潜行で敵が増える。,"With 3+ Curse on the board, board ×2. More enemies next dive."
+symbol.mannequin_head.desc,呪いが3つ以上で盤面×2。代わりに次の階層で敵が増える。,"With 3+ Curse on the board, board ×2. More enemies next floor."
 symbol.broken_radio.name,壊れたラジオ,Broken Radio
 symbol.broken_radio.desc,同じ列の電化製品の効果をもう1回発動。,Retriggers Electric effects in the same column.
 symbol.chipped_lucky_cat.name,招き猫（欠け）,Chipped Lucky Cat
@@ -37,7 +37,7 @@ symbol.pair_of_dice.desc,1/6で×12。外れても消えない。,"1 in 6: ×12.
 symbol.rusty_horseshoe.name,錆びた蹄鉄,Rusty Horseshoe
 symbol.rusty_horseshoe.desc,盤面の幸運1つにつき+1。,+1 for each Luck on the board.
 symbol.creepy_doll.name,髪の伸びる人形,Creepy Doll
-symbol.creepy_doll.desc,盤面の呪い1つにつき+2。盤面に出るたびに次の潜行で敵が増える。,+2 for each Curse on the board. Each spin it shows up adds an enemy next dive.
+symbol.creepy_doll.desc,盤面の呪い1つにつき+2。盤面に出るたびに次の階層で敵が増える。,+2 for each Curse on the board. Each spin it shows up adds an enemy next floor.
 symbol.broken_vending_machine.name,壊れた自販機,Broken Vending Machine
 symbol.broken_vending_machine.desc,盤面の電化製品1つにつき+2。1人では持ち上がらない。,+2 for each Electric on the board. Too heavy to lift alone.
 # --- レリック ---
@@ -154,13 +154,16 @@ hud.value,売値 {0},Sell {0}
 hud.integrity,状態 {0}%,Condition {0}%
 hud.broken,割れている,Broken
 hud.load,重量 {0} kg,Load {0} kg
-hud.extract,[F] ガラクタをスロット台に入れる（{0}個）,[F] Feed scrap to the slot machine ({0})
 hud.haul,台に入れたガラクタ：{0}個,Scrap in the machine: {0}
 hud.health,体力 {0}/{1},Health {0}/{1}
 hud.weapon,{0}  {1}/{2},{0}  {1}/{2}
 hud.fists,素手,Bare hands
 hud.weapon_broke,武器が壊れた！,Your weapon broke!
-hud.objective_done,攻略条件を満たした！Tab でエレベーターへ,Objective complete! Press Tab for the elevator
+hud.objective_done,攻略条件を満たした！入口のエレベーターへ,Objective complete! Head to the elevator at the entrance
+hud.use_machine,[E] {0}（持っている物を入れる）,[E] {0} (feed what you carry)
+hud.elevator_locked,エレベーター：攻略条件を満たすと動く,Elevator: runs once the objective is done
+hud.elevator_ready,[E] エレベーターで地下{0}階へ,[E] Take the elevator to B{0}
+hud.elevator_exit,[E] エレベーターで脱出する,[E] Take the elevator out
 hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spare {1})  Bandage {2}  Firecracker {3}
 hud.push_cart,[E] 台車を押す,[E] Push the cart
 hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)

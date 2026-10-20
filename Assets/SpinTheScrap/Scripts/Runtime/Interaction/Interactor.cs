@@ -73,6 +73,8 @@ namespace SpinTheScrap.Interaction
         Cart pushed;
 
         public Scrap Hovered { get; private set; }
+        /// <summary>見ている設置物（スロット台・エレベーター）。</summary>
+        public IInteractable HoveredInteractable { get; private set; }
         /// <summary>見ている台車（ガラクタを見ていないとき）。</summary>
         public Cart HoveredCart { get; private set; }
         /// <summary>押している台車。</summary>
@@ -108,6 +110,7 @@ namespace SpinTheScrap.Interaction
             {
                 Hovered = null;
                 HoveredCart = null;
+                HoveredInteractable = null;
                 chargeStartTime = -1f; // メニューを開いたらためを取り消す
             }
 
@@ -131,10 +134,27 @@ namespace SpinTheScrap.Interaction
         {
             Hovered = null;
             HoveredCart = null;
+            HoveredInteractable = null;
             if (Cam == null) return;
             var ray = new Ray(Cam.transform.position, Cam.transform.forward);
-            if (!Physics.Raycast(ray, out var hit, reach, ~0, QueryTriggerInteraction.Ignore)) return;
-            if (hit.rigidbody == null) return;
+            // 手に持っている物は照準をさえぎらない（持ったままスロット台を使えるように）
+            RaycastHit hit = default;
+            bool found = false;
+            float best = float.MaxValue;
+            foreach (var h in Physics.RaycastAll(ray, reach, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (held != null && h.rigidbody == held.Body) continue;
+                if (h.collider == controller.Controller || h.distance >= best) continue;
+                best = h.distance;
+                hit = h;
+                found = true;
+            }
+            if (!found) return;
+            if (hit.rigidbody == null)
+            {
+                HoveredInteractable = hit.collider.GetComponentInParent<IInteractable>();
+                return;
+            }
             var cart = hit.rigidbody.GetComponent<Cart>();
             if (cart != null && cart != pushed)
             {
@@ -155,7 +175,9 @@ namespace SpinTheScrap.Interaction
             if (GameInput.InteractPressed)
             {
                 InventoryFullFeedback = false;
-                if (pushed != null) StopPushing();
+                // スロット台は物を持ったままでも使える（持っている物ごと台に入れる）
+                if (HoveredInteractable != null) HoveredInteractable.Interact(this);
+                else if (pushed != null) StopPushing();
                 else if (held != null) Release();
                 else if (Hovered != null) PickUp(Hovered, hoverPoint);
                 else if (HoveredCart != null) StartPushing(HoveredCart);
@@ -217,6 +239,15 @@ namespace SpinTheScrap.Interaction
             if (held.Size != ScrapSize.Huge) body.angularDamping = heldAngularDamping;
             heldColliders = held.GetComponentsInChildren<Collider>();
             SetIgnorePlayerCollision(true);
+        }
+
+        /// <summary>手に持っているガラクタを手放して渡す（スロット台に入れるとき）。持っていなければ null。</summary>
+        public Scrap TakeHeld()
+        {
+            var scrap = held;
+            if (scrap == null) return null;
+            Release();
+            return scrap;
         }
 
         /// <summary>手に持っている物をその場で離す（倒れたときなど）。</summary>
