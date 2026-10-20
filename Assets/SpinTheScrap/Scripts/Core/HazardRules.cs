@@ -34,6 +34,16 @@ namespace SpinTheScrap.Core
 
         public bool CanShortCircuit(SymbolTag tags) => tags.HasAny(ShortCircuitTags);
 
+        /// <summary>絶縁ブーツを履いているときの、水たまりのダメージの倍率。</summary>
+        public double InsulatedBootsPuddleFactor = 0.3;
+
+        /// <summary>水たまりの中に seconds 秒いたときのダメージ。</summary>
+        public double PuddleDamage(double seconds, bool insulatedBoots) =>
+            PuddleDamagePerSecond * seconds * (insulatedBoots ? InsulatedBootsPuddleFactor : 1);
+
+        /// <summary>包帯 1 つで回復する体力。</summary>
+        public double BandageHeal = 40;
+
         /// <summary>入口以外の部屋に水たまりが出る確率。奥ほど高い。</summary>
         public double PuddleChance(RoomKind kind, int depth)
         {
@@ -66,5 +76,15 @@ namespace SpinTheScrap.Core
         }
 
         public void Reset() => Current = Max;
+
+        /// <summary>回復する。倒れていたら回復しない。実際に回復した量を返す。</summary>
+        public double Heal(double amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            if (IsDown) return 0;
+            double before = Current;
+            Current = Math.Min(Max, Current + amount);
+            return Current - before;
+        }
     }
 }

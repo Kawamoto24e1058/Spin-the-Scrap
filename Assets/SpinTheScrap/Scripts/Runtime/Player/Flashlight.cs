@@ -31,5 +31,6 @@ namespace SpinTheScrap.Player
         }
 
         public void Toggle() => spot.enabled = !spot.enabled;
+        public void SetOn(bool on) => spot.enabled = on;
     }
 }

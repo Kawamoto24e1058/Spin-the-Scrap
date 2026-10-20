@@ -29,6 +29,9 @@ namespace SpinTheScrap.UI
         // IMGUI はイベントごとに OnGUI が複数回呼ばれるため、描画中に一覧を変えると
         // レイアウトの整合が崩れる。ボタンの処理は次の Update で実行する。
         System.Action pending;
+        // 説明の列の幅。画面が狭くても横にはみ出さないよう、列の幅から決める
+        float labelWidth = 200f;
+        float cellWidth = 96f;
 
         public bool Visible { get; set; }
 
@@ -60,9 +63,11 @@ namespace SpinTheScrap.UI
 
             GUILayout.BeginHorizontal();
             float columnWidth = (area.width - 40) / 2f;
+            labelWidth = columnWidth * 0.5f;
+            cellWidth = Mathf.Min(96f, (columnWidth - 40f) / Board.Columns);
 
             GUILayout.BeginVertical(GUILayout.Width(columnWidth));
-            leftScroll = GUILayout.BeginScrollView(leftScroll);
+            leftScroll = GUILayout.BeginScrollView(leftScroll, GUIStyle.none, GUI.skin.verticalScrollbar);
             DrawHaul();
             GUILayout.Space(12);
             DrawReel();
@@ -72,10 +77,12 @@ namespace SpinTheScrap.UI
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(GUILayout.Width(columnWidth));
-            rightScroll = GUILayout.BeginScrollView(rightScroll);
+            rightScroll = GUILayout.BeginScrollView(rightScroll, GUIStyle.none, GUI.skin.verticalScrollbar);
             DrawSlot();
             GUILayout.Space(16);
             DrawFlow();
+            GUILayout.Space(16);
+            DrawTools();
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
@@ -91,7 +98,7 @@ namespace SpinTheScrap.UI
             {
                 GUILayout.BeginHorizontal();
                 string condition = item.ValueFactor < 1 ? " (" + Mathf.RoundToInt((float)item.ValueFactor * 100) + "%)" : "";
-                GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(200));
+                GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(labelWidth * 0.6f));
                 if (GUILayout.Button(s.Format("base.sell", session.Money(session.SellPriceOf(item))))) pending = () => { session.Sell(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
                 GUI.enabled = session.CanAddToReel(item);
                 if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => { session.AddToReel(item); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
@@ -109,7 +116,7 @@ namespace SpinTheScrap.UI
             foreach (var group in run.Reel.GroupBy(r => r.SymbolId).ToList())
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(session.SymbolName(group.Key) + " ×" + group.Count(), GUILayout.Width(200));
+                GUILayout.Label(session.SymbolName(group.Key) + " ×" + group.Count(), GUILayout.Width(labelWidth));
                 GUI.enabled = run.Money >= run.RemovalFee;
                 int instanceId = group.Last().InstanceId;
                 if (GUILayout.Button(s.Format("base.remove", session.Money(run.RemovalFee))))
@@ -132,9 +139,31 @@ namespace SpinTheScrap.UI
             {
                 var def = session.Content.GetRelic(id);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(280));
+                GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(labelWidth));
                 GUI.enabled = run.Money >= def.Price && run.Relics.Count < run.Config.MaxRelics;
                 if (GUILayout.Button(s.Format("base.buy", session.Money(def.Price)))) pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>道具屋。永続の道具は 1 回だけ、消耗品は上限まで買える。</summary>
+        void DrawTools()
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            GUILayout.Label("■ " + s.Get("base.tool_shop"));
+            foreach (var tool in run.ToolCatalog.Tools)
+            {
+                GUILayout.BeginHorizontal();
+                int owned = run.ToolCount(tool.Id);
+                string count = tool.Permanent ? (owned > 0 ? "  [" + s.Get("base.owned") + "]" : "")
+                                              : "  " + s.Format("base.tool_count", owned, tool.MaxCount);
+                GUILayout.Label(s.Get(tool.NameKey) + count + "：" + s.Get(tool.DescriptionKey), GUILayout.Width(labelWidth * 1.3f));
+                GUI.enabled = run.CanBuyTool(tool.Id);
+                string id = tool.Id;
+                if (GUILayout.Button(s.Format("base.buy", session.Money(tool.Price))))
+                    pending = () => { if (run.TryBuyTool(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.9f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -168,7 +197,7 @@ namespace SpinTheScrap.UI
                                (cell.Destroyed ? "×" : "+" + session.Money(cell.Value)) +
                                (cell.Triggers > 1 ? " ↻" + cell.Triggers : "");
                     }
-                    GUILayout.Box(text, cellStyle, GUILayout.Width(96), GUILayout.Height(52));
+                    GUILayout.Box(text, cellStyle, GUILayout.Width(cellWidth), GUILayout.Height(52));
                     GUI.color = prev;
                 }
                 GUILayout.EndHorizontal();

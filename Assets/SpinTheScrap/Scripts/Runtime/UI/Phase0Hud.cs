@@ -64,6 +64,9 @@ namespace SpinTheScrap.UI
             ShadowLabel(new Rect(16, 12, 900, 24), status, label);
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
+            // 道具：電池の残り、包帯・爆竹の数
+            ShadowLabel(new Rect(16, 116, 600, 24), s.Format("hud.tools", Mathf.RoundToInt((float)run.FlashlightCharge * 100),
+                run.ToolCount(ToolIds.Battery), run.ToolCount(ToolIds.Bandage), run.ToolCount(ToolIds.Firecracker)), label);
             if (health != null && health.State != null)
             {
                 var hp = health.State;

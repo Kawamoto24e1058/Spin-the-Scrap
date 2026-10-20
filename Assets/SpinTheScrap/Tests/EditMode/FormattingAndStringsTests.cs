@@ -70,6 +70,11 @@ namespace SpinTheScrap.Tests
                     Assert.IsTrue(table.Contains(r.NameKey, language), r.NameKey + " " + language);
                     Assert.IsTrue(table.Contains(r.DescriptionKey, language), r.DescriptionKey + " " + language);
                 }
+                foreach (var t in ToolCatalog.CreateMvp().Tools)
+                {
+                    Assert.IsTrue(table.Contains(t.NameKey, language), t.NameKey + " " + language);
+                    Assert.IsTrue(table.Contains(t.DescriptionKey, language), t.DescriptionKey + " " + language);
+                }
             }
         }
 

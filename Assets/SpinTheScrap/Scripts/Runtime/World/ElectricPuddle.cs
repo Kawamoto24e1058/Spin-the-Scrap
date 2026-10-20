@@ -20,6 +20,7 @@ namespace SpinTheScrap.World
 
         HazardRules rules;
         Func<string, SymbolTag> tagsOf;
+        Func<bool> hasInsulatedBoots;
         PlayerHealth player;
         BoxCollider box;
         Renderer surface;
@@ -30,8 +31,10 @@ namespace SpinTheScrap.World
 
         public bool IsLive => Time.time >= shortedUntil;
 
-        public void Init(HazardRules hazardRules, Func<string, SymbolTag> symbolTags, PlayerHealth playerHealth, Renderer surfaceRenderer, Light glowLight)
+        public void Init(HazardRules hazardRules, Func<string, SymbolTag> symbolTags, Func<bool> insulatedBoots,
+            PlayerHealth playerHealth, Renderer surfaceRenderer, Light glowLight)
         {
+            hasInsulatedBoots = insulatedBoots;
             rules = hazardRules;
             tagsOf = symbolTags;
             player = playerHealth;
@@ -53,7 +56,7 @@ namespace SpinTheScrap.World
             UpdateLook();
             if (!IsLive || player == null || player.IsDown) return;
             var feet = player.transform.position + Vector3.down * 0.9f;
-            if (Contains(feet)) player.Damage(rules.PuddleDamagePerSecond * Time.deltaTime);
+            if (Contains(feet)) player.Damage(rules.PuddleDamage(Time.deltaTime, hasInsulatedBoots != null && hasInsulatedBoots()));
         }
 
         void OnTriggerEnter(Collider other)

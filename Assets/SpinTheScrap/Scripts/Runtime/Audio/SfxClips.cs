@@ -29,6 +29,7 @@ namespace SpinTheScrap.Audio
         public static AudioClip Win { get; private set; }
         public static AudioClip Coin { get; private set; }
         public static AudioClip Extract { get; private set; }
+        public static AudioClip Bang { get; private set; }
 
         // どれかの音に初めて触れたときに全部作る（引数で SfxClips.X を渡す時点で作られている必要がある）
         static SfxClips() => Build();
@@ -58,6 +59,28 @@ namespace SpinTheScrap.Audio
             Win = Arpeggio("Win", new[] { 523.25f, 659.25f, 783.99f, 1046.5f }, 0.11f, 0.5f);
             Coin = Arpeggio("Coin", new[] { 1318.5f, 1760f }, 0.07f, 0.25f);
             Extract = Arpeggio("Extract", new[] { 440f, 659.25f, 880f }, 0.14f, 0.7f);
+            Bang = BangClip(rng);
+        }
+
+        /// <summary>爆竹のパパパン。大きな破裂音を 5 回、少しずつ間を空けて鳴らす。</summary>
+        static AudioClip BangClip(System.Random rng)
+        {
+            var d = Buffer(1.1f);
+            float when = 0f;
+            for (int k = 0; k < 5; k++)
+            {
+                int start = (int)(when * Rate);
+                float low = 0f;
+                for (int j = 0; start + j < d.Length && j < 9000; j++)
+                {
+                    float t = j / (float)Rate;
+                    low += (Noise(rng) - low) * 0.3f;
+                    d[start + j] += (low * 1.5f + Mathf.Sin(2f * Mathf.PI * 70f * t) * 0.5f) * Mathf.Exp(-t * 35f);
+                }
+                when += 0.08f + (float)rng.NextDouble() * 0.12f;
+            }
+            for (int i = 0; i < d.Length; i++) d[i] = (float)Math.Tanh(d[i] * 1.5f) * 0.85f;
+            return Make("Bang", d);
         }
 
         // ---- 部品 ----

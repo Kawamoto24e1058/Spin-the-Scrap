@@ -33,6 +33,9 @@ namespace SpinTheScrap.Core
         public int BaseRoomCount = 4;
         public int MaxRoomCount = 9;
 
+        /// <summary>懐中電灯の電池 1 本で点けていられる時間 (s)。</summary>
+        public double FlashlightBatterySeconds = 180;
+
         public List<string> StartingReel = new List<string> { "empty_can", "empty_can", "empty_can", "empty_can", "empty_can" };
 
         public double QuotaFor(int cycle)

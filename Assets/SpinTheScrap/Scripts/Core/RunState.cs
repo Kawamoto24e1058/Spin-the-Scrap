@@ -26,6 +26,8 @@ namespace SpinTheScrap.Core
         readonly List<SymbolInstance> reel = new List<SymbolInstance>();
         readonly List<RelicDefinition> relics = new List<RelicDefinition>();
         readonly List<string> relicOffers = new List<string>();
+        readonly ToolCatalog toolCatalog;
+        readonly Dictionary<string, int> tools = new Dictionary<string, int>();
         int nextInstanceId = 1;
 
         public ContentDatabase Content => db;
@@ -41,6 +43,9 @@ namespace SpinTheScrap.Core
         /// <summary>次の潜行で増える敵の数（マネキンの首など）。</summary>
         public int PendingEnemyBonus { get; private set; }
         public ulong RngState => rng.State;
+        public ToolCatalog ToolCatalog => toolCatalog;
+        /// <summary>懐中電灯の電池の残り（0〜1）。ランを通して持ち越す。</summary>
+        public double FlashlightCharge { get; private set; } = 1;
 
         public IReadOnlyList<SymbolInstance> Reel => reel;
         public IReadOnlyList<RelicDefinition> Relics => relics;
@@ -77,10 +82,11 @@ namespace SpinTheScrap.Core
             }
         }
 
-        public RunState(ContentDatabase db, BalanceConfig config, ulong seed)
+        public RunState(ContentDatabase db, BalanceConfig config, ulong seed, ToolCatalog toolCatalog = null)
         {
             this.db = db ?? throw new ArgumentNullException(nameof(db));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.toolCatalog = toolCatalog ?? ToolCatalog.CreateMvp();
             rng = new Rng(seed);
             Money = config.StartingMoney;
             foreach (var id in config.StartingReel) AddToReel(id, -1);
@@ -138,6 +144,48 @@ namespace SpinTheScrap.Core
             Money -= def.Price;
             relics.Add(def);
             relicOffers.Remove(relicId);
+            return true;
+        }
+
+        // ---- 道具屋 ----
+
+        public int ToolCount(string toolId) => tools.TryGetValue(toolId, out int n) ? n : 0;
+        public bool HasTool(string toolId) => ToolCount(toolId) > 0;
+
+        /// <summary>まだ買えるか（お金が足りて、持てる数に空きがある）。</summary>
+        public bool CanBuyTool(string toolId)
+        {
+            var def = toolCatalog.Get(toolId);
+            return !IsFailed && Money >= def.Price && ToolCount(toolId) < def.MaxCount;
+        }
+
+        public bool TryBuyTool(string toolId)
+        {
+            if (!CanBuyTool(toolId)) return false;
+            Money -= toolCatalog.Get(toolId).Price;
+            tools[toolId] = ToolCount(toolId) + 1;
+            return true;
+        }
+
+        /// <summary>消耗品を 1 つ使う。永続の道具は減らない（使えたかどうかだけ返す）。</summary>
+        public bool TryUseTool(string toolId)
+        {
+            if (!HasTool(toolId)) return false;
+            if (!toolCatalog.Get(toolId).Permanent) tools[toolId]--;
+            return true;
+        }
+
+        /// <summary>
+        /// 懐中電灯を seconds 秒点けた分だけ電池を減らす。切れたら予備の電池に自動で交換する。
+        /// まだ点けていられるなら true（予備もなく切れたら false）。
+        /// </summary>
+        public bool DrainFlashlight(double seconds)
+        {
+            if (seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
+            FlashlightCharge = Math.Max(0, FlashlightCharge - seconds / config.FlashlightBatterySeconds);
+            if (FlashlightCharge > 0) return true;
+            if (!TryUseTool(ToolIds.Battery)) return false;
+            FlashlightCharge = 1;
             return true;
         }
 

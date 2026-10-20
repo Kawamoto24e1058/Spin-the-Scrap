@@ -103,7 +103,7 @@ namespace SpinTheScrap.World
             player.InputEnabled = playing;
             if (!playing) return;
 
-            if (GameInput.FlashlightPressed) flashlight.Toggle();
+            UpdateTools();
             if (GameInput.ExtractPressed)
             {
                 bool playerInZone = zone.Contains(player.transform.position);
@@ -113,6 +113,31 @@ namespace SpinTheScrap.World
                     basePanel.Visible = true;
                     Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
                 }
+            }
+        }
+
+        /// <summary>懐中電灯の電池、包帯（H）、爆竹（Q）。数と使えるかどうかは RunState（Core）が決める。</summary>
+        void UpdateTools()
+        {
+            var run = session.Run;
+            if (GameInput.FlashlightPressed)
+            {
+                // 電池が切れていて予備もなければ点かない
+                if (flashlight.IsOn) flashlight.SetOn(false);
+                else if (run.FlashlightCharge > 0 || run.HasTool(ToolIds.Battery)) flashlight.SetOn(true);
+            }
+            if (flashlight.IsOn && !run.DrainFlashlight(Time.deltaTime)) flashlight.SetOn(false);
+
+            if (GameInput.BandagePressed && health.State.Current < health.State.Max && run.TryUseTool(ToolIds.Bandage))
+            {
+                health.Heal(session.Hazards.BandageHeal);
+                Audio.Sfx.Play2D(Audio.SfxClips.Knock, 0.4f, 0.7f);
+            }
+
+            if (GameInput.FirecrackerPressed && run.TryUseTool(ToolIds.Firecracker))
+            {
+                var cam = player.ViewCamera.transform;
+                Firecracker.Throw(facility.Root, cam.position + cam.forward * 0.5f, cam.forward, session.Enemies);
             }
         }
 
@@ -136,8 +161,9 @@ namespace SpinTheScrap.World
             SpawnScrap();
             SpawnHazards();
             SpawnEnemies(enemyBonus);
-            // 台車は入口に 1 台（のちに店で買う道具にする想定）
-            Cart.Spawn(facility.Root, new Vector3(6f, 0.05f, -9f), Quaternion.identity, session.Tools);
+            // 台車は道具屋で買っていれば入口に 1 台
+            if (session.Run.HasTool(ToolIds.Cart))
+                Cart.Spawn(facility.Root, new Vector3(6f, 0.05f, -9f), Quaternion.identity, session.Tools);
             health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
@@ -179,7 +205,7 @@ namespace SpinTheScrap.World
                 if (!room.PuddleSpot.HasValue) continue;
                 if (spawnRng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
                 var puddle = FacilityBuilder.CreatePuddle(room.Root, room.PuddleSpot.Value, out var surface, out var glow);
-                puddle.Init(rules, id => content.GetSymbol(id).Tags, health, surface, glow);
+                puddle.Init(rules, id => content.GetSymbol(id).Tags, () => session.Run.HasTool(ToolIds.InsulatedBoots), health, surface, glow);
             }
         }
 

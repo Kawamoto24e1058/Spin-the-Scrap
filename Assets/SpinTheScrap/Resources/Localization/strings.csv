@@ -42,6 +42,17 @@ tag.Fragile,割れ物,Fragile
 tag.Toy,おもちゃ,Toy
 tag.Paper,紙,Paper
 tag.Food,食べ物,Food
+# --- 道具 ---
+tool.cart.name,台車,Push Cart
+tool.cart.desc,潜行のたびに入口に置かれる。大きい物をまとめて運べる。,Waits at the entrance every dive. Haul large scrap in bulk.
+tool.insulated_boots.name,絶縁ブーツ,Insulated Boots
+tool.insulated_boots.desc,電気が流れる水たまりのダメージを30%に減らす。,Electrified puddles deal 30% damage.
+tool.battery.name,電池,Battery
+tool.battery.desc,懐中電灯の電池が切れたら自動で交換する。,Swaps in automatically when the flashlight dies.
+tool.bandage.name,包帯,Bandage
+tool.bandage.desc,[H] 体力を40回復する。,[H] Restore 40 health.
+tool.firecracker.name,爆竹,Firecracker
+tool.firecracker.desc,[Q] 投げると少しして大きな音で鳴り、敵をおびき寄せる。,[Q] Throw it; it bangs loudly a moment later and lures enemies.
 # --- 運搬区分 ---
 size.Small,小,Small
 size.Large,大,Large
@@ -60,10 +71,11 @@ hud.load,重量 {0} kg,Load {0} kg
 hud.extract,[F] ガラクタを運び出す（{0}個）,[F] Extract scrap ({0})
 hud.haul,運び出したガラクタ：{0}個,Extracted scrap: {0}
 hud.health,体力 {0}/{1},Health {0}/{1}
+hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spare {1})  Bandage {2}  Firecracker {3}
 hud.push_cart,[E] 台車を押す,[E] Push the cart
 hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)
 hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
-hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / Tab Base menu
+hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / H Bandage / Q Firecracker / Tab Base menu
 # --- 拠点メニュー ---
 base.title,拠点（ボロアパート）,Base (Shabby Apartment)
 base.status,サイクル {0}  潜行 {1}/{2}  所持金 {3}  ノルマ {4},Cycle {0}  Dive {1}/{2}  Money {3}  Quota {4}
@@ -85,4 +97,7 @@ base.cleared,完済！以降はエンドレス。,Debt cleared! Endless mode fro
 base.failed,ノルマ未達。ラン終了。,Quota missed. Run over.
 base.new_run,新しいラン,New run
 base.enemy_bonus,次の潜行で敵 +{0},Next dive enemies +{0}
+base.tool_shop,道具屋,Tool Shop
+base.owned,購入済み,Owned
+base.tool_count,{0}/{1}個,{0}/{1}
 base.downed,倒れた。持っていたガラクタ{0}個を失った。,You went down. Lost {0} scrap you were carrying.

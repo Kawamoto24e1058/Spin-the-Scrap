@@ -41,6 +41,10 @@ namespace SpinTheScrap.Core
         public double ImpactNoisePerSpeed = 1.6;
         public double MaxImpactNoiseRadius = 15;
         public double BreakNoiseRadius = 16;
+        /// <summary>爆竹の音。敵をおびき寄せるため、どの音より遠くまで届く。</summary>
+        public double FirecrackerNoiseRadius = 24;
+        /// <summary>爆竹を投げてから鳴るまでの時間 (s)。</summary>
+        public double FirecrackerFuseSeconds = 1.5;
 
         /// <summary>この速さ (m/s) 未満の衝突は音にならない。潜行の開始時にガラクタを 0.4m 上から置く着地（約 2.8m/s）は数えない。</summary>
         public double ImpactNoiseMinSpeed = 3;

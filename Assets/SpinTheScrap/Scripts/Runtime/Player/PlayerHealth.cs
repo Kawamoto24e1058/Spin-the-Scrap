@@ -57,6 +57,13 @@ namespace SpinTheScrap.Player
             if (State.Damage(amount)) Downed?.Invoke();
         }
 
+        /// <summary>回復する。実際に回復したら true。</summary>
+        public bool Heal(double amount)
+        {
+            if (State == null) return false;
+            return State.Heal(amount) > 0;
+        }
+
         public void ResetHealth()
         {
             State?.Reset();
