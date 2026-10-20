@@ -57,6 +57,44 @@ namespace SpinTheScrap.Core
             return Math.Round(BaseDamage(kind) * Math.Pow(DamageFloorGrowth, floor - 1));
         }
 
+        /// <summary>
+        /// 敵の種類ごとの動き（速さ・見える距離・攻撃の届く距離と間隔・攻撃力）にした写しを作る。
+        /// 音の大きさなど共通の値はそのまま引き継ぐ。
+        /// </summary>
+        public EnemyRules Profile(EnemyKind kind, int floor)
+        {
+            var p = (EnemyRules)MemberwiseClone();
+            p.AttackDamage = DamageFor(kind, floor);
+            switch (kind)
+            {
+                case EnemyKind.Crawler:
+                    p.WanderSpeed = 1.4;
+                    p.InvestigateSpeed = 3;
+                    p.ChaseSpeed = 4.2;
+                    p.SightRange = 14;
+                    p.SightHalfAngle = 80;
+                    p.SenseRange = 3;
+                    p.AttackRange = 1.3;
+                    p.AttackCooldown = 0.9;
+                    p.StunSeconds = 1.5;
+                    break;
+                case EnemyKind.Brute:
+                    // 目が見えない：視界の代わりに、すぐ近くと音だけで動く。突進は速い
+                    p.WanderSpeed = 1.2;
+                    p.InvestigateSpeed = 6;
+                    p.ChaseSpeed = 6;
+                    p.SightRange = 0;
+                    p.SenseRange = 2.5;
+                    p.AttackRange = 2.2;
+                    p.AttackCooldown = 1.4;
+                    p.StunSeconds = 4;
+                    p.LookAroundSeconds = 1.5;
+                    p.FlashlightNoticeRange = 0;
+                    break;
+            }
+            return p;
+        }
+
         /// <summary>通常の階で同時にいる這う者の数。倒されると湧き直す。</summary>
         public int CrawlerPopulationFor(int floor) => Math.Min(4 + floor, 12);
 

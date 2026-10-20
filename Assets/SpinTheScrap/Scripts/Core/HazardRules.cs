@@ -55,7 +55,7 @@ namespace SpinTheScrap.Core
     /// <summary>潜行中の体力。ダメージと回復だけを持ち、倒れたかどうかを返す。</summary>
     public sealed class HealthState
     {
-        public double Max { get; }
+        public double Max { get; private set; }
         public double Current { get; private set; }
         public bool IsDown => Current <= 0;
 
@@ -64,6 +64,15 @@ namespace SpinTheScrap.Core
             if (max <= 0) throw new ArgumentOutOfRangeException(nameof(max));
             Max = max;
             Current = max;
+        }
+
+        /// <summary>最大体力を変える（強化）。増えた分だけ今の体力も増える。減ったら今の体力を上限に合わせる。</summary>
+        public void SetMax(double max)
+        {
+            if (max <= 0) throw new ArgumentOutOfRangeException(nameof(max));
+            if (!IsDown && max > Max) Current += max - Max;
+            Max = max;
+            Current = Math.Min(Current, Max);
         }
 
         /// <summary>ダメージを与える。この呼び出しで倒れたら true。</summary>

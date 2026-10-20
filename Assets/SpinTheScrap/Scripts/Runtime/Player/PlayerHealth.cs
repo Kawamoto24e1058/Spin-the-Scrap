@@ -21,6 +21,8 @@ namespace SpinTheScrap.Player
 
         public HealthState State { get; private set; }
         public bool IsDown => State != null && State.IsDown;
+        /// <summary>受けるダメージの倍率（呪いの強化で増える）。Phase0Bootstrap が強化から設定する。</summary>
+        public double DamageTakenMultiplier { get; set; } = 1;
         /// <summary>直前にダメージを受けてからの、画面を赤くする強さ（0〜1）。</summary>
         public float DamageFlash => Mathf.Clamp01(1f - (Time.time - lastDamageTime) / FlashSeconds);
 
@@ -47,6 +49,7 @@ namespace SpinTheScrap.Player
         public void Damage(double amount)
         {
             if (State == null || amount <= 0 || State.IsDown) return;
+            amount *= DamageTakenMultiplier;
             // 水たまりのように毎フレーム受けるダメージで鳴りっぱなしにならないよう、間を空ける
             if (Time.time - lastHurtSoundTime > 0.5f)
             {

@@ -88,6 +88,10 @@ objective.label,攻略条件：{0}（{1}）,Objective: {0} ({1})
 objective.done,達成,Done
 objective.DefeatEnemies,敵を倒す,Defeat enemies
 objective.DefeatBoss,ボスを倒す,Defeat the boss
+# --- 敵 ---
+enemy.Crawler,這う者,Crawler
+enemy.Lurker,徘徊者,Lurker
+enemy.Brute,目の見えない巨体,Blind Brute
 # --- スロット台 ---
 machine.Weapon,武器スロット,Weapon Slot
 machine.Weapon.desc,武器が出る。リールで多いタグの武器、盤面の合計が大きいほど良い武器。,Gives a weapon. The reel's strongest tag picks the type; a bigger board total gives a better one.
@@ -153,11 +157,15 @@ hud.load,重量 {0} kg,Load {0} kg
 hud.extract,[F] ガラクタをスロット台に入れる（{0}個）,[F] Feed scrap to the slot machine ({0})
 hud.haul,台に入れたガラクタ：{0}個,Scrap in the machine: {0}
 hud.health,体力 {0}/{1},Health {0}/{1}
+hud.weapon,{0}  {1}/{2},{0}  {1}/{2}
+hud.fists,素手,Bare hands
+hud.weapon_broke,武器が壊れた！,Your weapon broke!
+hud.objective_done,攻略条件を満たした！Tab でエレベーターへ,Objective complete! Press Tab for the elevator
 hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spare {1})  Bandage {2}  Firecracker {3}
 hud.push_cart,[E] 台車を押す,[E] Push the cart
 hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)
 hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
-hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / H Bandage / Q Firecracker / Tab Base menu
+hud.controls,左クリック 攻撃 / E 拾う / 右クリック長押し 投げる / G 落とす / 1-4 枠 / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab スロット台,LMB Attack / E Pick up / Hold RMB Throw / G Drop / 1-4 Slot / L Flashlight / H Bandage / Q Firecracker / Tab Slot machine
 # --- 拠点メニュー ---
 base.status,地下 {0}/{1}階  残機 {2}  メダル {3},Floor B{0}/{1}  Lives {2}  Medals {3}
 base.haul,台に入れたガラクタ,Scrap in the machine

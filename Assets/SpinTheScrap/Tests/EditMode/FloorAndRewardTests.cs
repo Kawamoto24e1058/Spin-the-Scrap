@@ -184,6 +184,42 @@ namespace SpinTheScrap.Tests
         }
 
         [Test]
+        public void ProfilesTuneEachEnemyKind()
+        {
+            var rules = new EnemyRules();
+            var crawler = rules.Profile(EnemyKind.Crawler, 1);
+            var brute = rules.Profile(EnemyKind.Brute, 3);
+            Assert.Less(crawler.ChaseSpeed, 4.5, "這う者は走れば逃げられる");
+            Assert.AreEqual(rules.DamageFor(EnemyKind.Crawler, 1), crawler.AttackDamage);
+            Assert.AreEqual(0, brute.SightRange, "巨体は目が見えない");
+            Assert.AreEqual(rules.DamageFor(EnemyKind.Brute, 3), brute.AttackDamage);
+            Assert.AreEqual(rules.RunNoiseRadius, brute.RunNoiseRadius, "音の大きさは共通");
+            Assert.AreNotSame(rules, crawler);
+
+            // 目の見えない巨体は、正面にいても離れていれば気づかない
+            var brain = new EnemyBrain(brute);
+            var p = new EnemyPerception
+            {
+                Position = System.Numerics.Vector3.Zero,
+                Forward = new System.Numerics.Vector3(0, 0, 1),
+                PlayerPosition = new System.Numerics.Vector3(0, 0, 6),
+                HasLineOfSight = true,
+            };
+            Assert.IsFalse(brain.CanSee(p));
+        }
+
+        [Test]
+        public void RaisingMaxHealthAlsoRaisesCurrent()
+        {
+            var health = new HealthState(100);
+            health.Damage(30);
+            health.SetMax(130);
+            Assert.AreEqual(100, health.Current);
+            health.SetMax(80);
+            Assert.AreEqual(80, health.Current, "上限を下げたら合わせる");
+        }
+
+        [Test]
         public void StayingLongerMakesCrawlersReturnFaster()
         {
             var enemies = new EnemyRules();

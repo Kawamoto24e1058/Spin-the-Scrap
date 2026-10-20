@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using SpinTheScrap.Core;
+using SpinTheScrap.Enemies;
 using SpinTheScrap.Interaction;
 using SpinTheScrap.Player;
 using SpinTheScrap.Session;
@@ -32,6 +33,10 @@ namespace SpinTheScrap.World
         BuiltFacility facility;
         Rng spawnRng;
         bool panelWasVisible;
+        PlayerCombat combat;
+        float floorStartTime;
+        float nextCrawlerTime;
+        readonly List<Enemy> crawlers = new List<Enemy>();
 
         void Awake()
         {
@@ -48,6 +53,8 @@ namespace SpinTheScrap.World
             health.Downed += OnPlayerDowned;
             NoiseEvents.Rules = session.Enemies;
             player.GetComponent<PlayerNoise>().Init(session.Enemies);
+            combat.Init(session);
+            Enemy.AnyDied += OnEnemyDied;
 
             var hud = gameObject.AddComponent<Phase0Hud>();
             hud.Init(session, player, interactor, zone, health);
@@ -62,6 +69,7 @@ namespace SpinTheScrap.World
         {
             if (session != null) session.FloorStarted -= OnFloorStarted;
             if (health != null) health.Downed -= OnPlayerDowned;
+            Enemy.AnyDied -= OnEnemyDied;
             Time.timeScale = 1f;
             AudioListener.pause = false;
         }
@@ -75,6 +83,69 @@ namespace SpinTheScrap.World
             session.ReportDowned(lost.Count);
             basePanel.OnDownedScreen = true;
             basePanel.Visible = true;
+        }
+
+        /// <summary>
+        /// 敵が倒された：攻略条件を進め、倒した人の回復（食べ物の強化）と、這う者はガラクタを落とすことがある。
+        /// </summary>
+        void OnEnemyDied(Enemy enemy)
+        {
+            var run = session.Run;
+            var kind = enemy.Kind == EnemyKind.Brute ? FloorObjectiveKind.DefeatBoss : FloorObjectiveKind.DefeatEnemies;
+            if (run.ReportObjective(kind))
+            {
+                session.NotifyObjectiveComplete();
+                Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f);
+            }
+            var stats = run.StatsOf(session.LocalPlayerId);
+            if (stats.HealOnKill > 0) health.Heal(stats.HealOnKill);
+            crawlers.Remove(enemy);
+
+            if (enemy.Kind == EnemyKind.Crawler && spawnRng.NextDouble() < session.Enemies.CrawlerScrapDropChance)
+                DropScrap(enemy.transform.position, 0);
+            else if (enemy.Kind == EnemyKind.Brute)
+                for (int i = 0; i < 6; i++) DropScrap(enemy.transform.position + Random.insideUnitSphere * 1.5f, 3);
+        }
+
+        /// <summary>敵が落とすガラクタ。depth が深いほど珍しい物が出やすい。</summary>
+        void DropScrap(Vector3 position, int depth)
+        {
+            var others = session.Content.Symbols.Where(s => s.Size == ScrapSize.Small).ToList();
+            if (others.Count == 0) return;
+            Place(PickWeighted(others, depth), new Vector3(position.x, Mathf.Max(0.1f, position.y - 0.5f), position.z));
+        }
+
+        /// <summary>強化で決まる能力値を、体力・移動・被ダメージに反映する（強化スロットを回すと変わる）。</summary>
+        void ApplyStats()
+        {
+            var stats = session.Run.StatsOf(session.LocalPlayerId);
+            if (health.State != null && !health.IsDown && System.Math.Abs(health.State.Max - stats.MaxHealth) > 0.01)
+                health.State.SetMax(stats.MaxHealth);
+            health.DamageTakenMultiplier = stats.DamageTakenMultiplier;
+            player.PerkSpeedMultiplier = (float)stats.MoveSpeedMultiplier;
+        }
+
+        /// <summary>通常の階では、倒された這う者が湧き直す。階層に長くいるほど早く湧く（長居するほど危ない）。</summary>
+        void UpdateCrawlers()
+        {
+            if (session.Run.IsBossFloor || facility == null) return;
+            crawlers.RemoveAll(c => c == null);
+            int population = session.Enemies.CrawlerPopulationFor(session.Run.Floor);
+            if (crawlers.Count >= population || Time.time < nextCrawlerTime) return;
+            nextCrawlerTime = Time.time + (float)session.Enemies.CrawlerRespawnSeconds(Time.time - floorStartTime);
+            SpawnCrawler(awayFromPlayer: true);
+        }
+
+        void SpawnCrawler(bool awayFromPlayer)
+        {
+            var playerRoom = facility.RoomAt(player.transform.position);
+            var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance && (!awayFromPlayer || r.Plan != playerRoom)).ToList();
+            if (rooms.Count == 0) return;
+            var room = rooms[spawnRng.Next(rooms.Count)];
+            var offset = new Vector3((float)(spawnRng.NextDouble() * 12 - 6), 0f, (float)(spawnRng.NextDouble() * 12 - 6));
+            var enemy = Enemy.Spawn(EnemyKind.Crawler, session.Run.Floor, facility.Root, FacilityBuilder.RoomCenter(room.Plan) + offset,
+                session.Enemies, facility, player, health, flashlight, spawnRng.NextULong());
+            crawlers.Add(enemy);
         }
 
         void Update()
@@ -105,6 +176,8 @@ namespace SpinTheScrap.World
             if (!playing) return;
 
             UpdateTools();
+            ApplyStats();
+            UpdateCrawlers();
             if (GameInput.ExtractPressed)
             {
                 bool playerInZone = zone.Contains(player.transform.position);
@@ -163,6 +236,11 @@ namespace SpinTheScrap.World
             SpawnScrap();
             SpawnHazards();
             SpawnEnemies(enemyBonus);
+            crawlers.Clear();
+            floorStartTime = Time.time;
+            nextCrawlerTime = Time.time + 3f;
+            if (!session.Run.IsBossFloor)
+                for (int i = 0; i < session.Enemies.CrawlerPopulationFor(session.Run.Floor); i++) SpawnCrawler(awayFromPlayer: true);
             // 台車は道具屋で買っていれば入口に 1 台
             if (session.Run.HasTool(ToolIds.Cart))
                 Cart.Spawn(facility.Root, new Vector3(6f, 0.05f, -9f), Quaternion.identity, session.Tools);
@@ -219,13 +297,22 @@ namespace SpinTheScrap.World
         {
             var rules = session.Enemies;
             var run = session.Run;
-            int count = rules.CountFor(run.Floor, enemyBonus, facility.Rooms.Count);
             var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance)
-                .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).Take(count);
-            foreach (var room in rooms)
+                .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).ToList();
+            if (rooms.Count == 0) return;
+
+            // ボス階層：いちばん奥の部屋に目の見えない巨体（ボス専用の階層を作るまでの仮）
+            if (run.IsBossFloor)
+            {
+                Enemy.Spawn(EnemyKind.Brute, run.Floor, facility.Root, FacilityBuilder.RoomCenter(rooms[0].Plan),
+                    rules, facility, player, health, flashlight, spawnRng.NextULong());
+            }
+
+            int count = rules.CountFor(run.Floor, enemyBonus, facility.Rooms.Count);
+            foreach (var room in rooms.Skip(run.IsBossFloor ? 1 : 0).Take(count))
             {
                 var position = FacilityBuilder.RoomCenter(room.Plan) + new Vector3(3f, 0f, 3f);
-                Enemies.Lurker.Spawn(facility.Root, position, rules, facility, player, health, flashlight, spawnRng.NextULong());
+                Enemy.Spawn(EnemyKind.Lurker, run.Floor, facility.Root, position, rules, facility, player, health, flashlight, spawnRng.NextULong());
             }
         }
 
@@ -306,6 +393,7 @@ namespace SpinTheScrap.World
             interactor = go.AddComponent<Interactor>();
             health = go.AddComponent<PlayerHealth>();
             go.AddComponent<PlayerNoise>();
+            combat = go.AddComponent<PlayerCombat>();
         }
     }
 }

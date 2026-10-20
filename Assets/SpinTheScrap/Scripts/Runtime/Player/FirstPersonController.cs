@@ -43,8 +43,10 @@ namespace SpinTheScrap.Player
         public float LoadKg { get; set; }
         /// <summary>大・特大を抱えているときは走れない。</summary>
         public bool RunBlocked { get; set; }
-        /// <summary>重さとは別に掛ける移動速度の倍率（特大を引きずるときなど）。</summary>
+        /// <summary>重さとは別に掛ける移動速度の倍率（特大を引きずるときなど）。Interactor が毎フレーム設定する。</summary>
         public float SpeedMultiplier { get; set; } = 1f;
+        /// <summary>強化（割れ物）による移動速度の倍率。</summary>
+        public float PerkSpeedMultiplier { get; set; } = 1f;
         /// <summary>空中から着地した。引数は着地の速さ (m/s、下向きを正)。</summary>
         public event System.Action<float> Landed;
         public float LoadFactor => Mathf.Clamp01(LoadKg / maxLoadKg);
@@ -88,7 +90,7 @@ namespace SpinTheScrap.Player
 
             var input = InputEnabled ? GameInput.Move : Vector2.zero;
             bool running = InputEnabled && GameInput.RunHeld && !RunBlocked && input.y > 0f;
-            float speed = (running ? runSpeed : walkSpeed) * Mathf.Lerp(1f, minSpeedFactor, load) * SpeedMultiplier;
+            float speed = (running ? runSpeed : walkSpeed) * Mathf.Lerp(1f, minSpeedFactor, load) * SpeedMultiplier * PerkSpeedMultiplier;
             var horizontal = (transform.right * input.x + transform.forward * input.y) * speed;
             if (tethered) horizontal = ApplyTether(horizontal);
 

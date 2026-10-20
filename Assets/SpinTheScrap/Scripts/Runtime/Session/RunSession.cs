@@ -132,6 +132,9 @@ namespace SpinTheScrap.Session
         /// <summary>台を回した（音を鳴らす・武器を持ち替えるなど、世界の側の処理用）。</summary>
         public event Action<MachineOutcome> Spun;
 
+        /// <summary>攻略条件を満たした（HUD とメニューに知らせる）。</summary>
+        public void NotifyObjectiveComplete() => Message = Strings.Get("base.objective_done");
+
         /// <summary>攻略条件を満たしていれば次の階層へ（最後の階層ならクリア）。進んだら true。</summary>
         public bool TryAdvanceFloor()
         {

@@ -18,6 +18,7 @@ namespace SpinTheScrap.UI
         Interactor interactor;
         ExtractionZone zone;
         PlayerHealth health;
+        PlayerCombat combat;
         GUIStyle label;
         GUIStyle center;
         int extractableCount;
@@ -29,6 +30,7 @@ namespace SpinTheScrap.UI
             interactor = playerInteractor;
             zone = extractionZone;
             health = playerHealth;
+            combat = fpc.GetComponent<PlayerCombat>();
         }
 
         void Update()
@@ -56,7 +58,7 @@ namespace SpinTheScrap.UI
             }
 
             // 照準
-            ShadowLabel(new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24), "+", center);
+            DrawCrosshair();
 
             // 左上：ランの状況
             string status = s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
@@ -113,6 +115,9 @@ namespace SpinTheScrap.UI
             if (interactor.InventoryFullFeedback) Line(s.Get("hud.inventory_full"), ref y);
 
             if (extractableCount > 0) Line(s.Format("hud.extract", extractableCount), ref y);
+            if (combat != null && Time.time - combat.WeaponBrokeTime < 2f) Line(s.Get("hud.weapon_broke"), ref y);
+            if (run.Objective.IsComplete && !run.IsOver) Line(s.Get("hud.objective_done"), ref y);
+            DrawWeapon();
 
             // 下：インベントリ枠
             var inv = interactor.Inventory;
@@ -129,6 +134,42 @@ namespace SpinTheScrap.UI
             }
 
             ShadowLabel(new Rect(16, Screen.height - 28, Screen.width - 32, 24), s.Get("hud.controls"), label);
+        }
+
+        /// <summary>照準。当てた直後は ×（会心は黄色）にし、狙っている敵の体力を上に出す。</summary>
+        void DrawCrosshair()
+        {
+            var rect = new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24);
+            bool hit = combat != null && Time.time - combat.LastHitTime < 0.15f;
+            var prev = center.normal.textColor;
+            if (hit) center.normal.textColor = combat.LastHitCritical ? new Color(1f, 0.85f, 0.2f) : new Color(1f, 0.4f, 0.3f);
+            ShadowLabel(rect, hit ? "×" : "+", center);
+            center.normal.textColor = prev;
+
+            var target = combat != null ? combat.Target : null;
+            if (target == null || target.Health == null) return;
+            var bar = new Rect(Screen.width / 2f - 60, Screen.height / 2f - 34, 120, 6);
+            float ratio = (float)(target.Health.Current / target.Health.Max);
+            var c = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f);
+            GUI.DrawTexture(bar, Texture2D.whiteTexture);
+            GUI.color = new Color(0.9f, 0.25f, 0.2f);
+            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * ratio, bar.height), Texture2D.whiteTexture);
+            GUI.color = c;
+            ShadowLabel(new Rect(Screen.width / 2f - 150, Screen.height / 2f - 58, 300, 24), session.Strings.Get("enemy." + target.Kind), center);
+        }
+
+        /// <summary>右下：手に持っている武器と残りの耐久・弾数。</summary>
+        void DrawWeapon()
+        {
+            if (combat == null) return;
+            var s = session.Strings;
+            var weapon = session.Run.Player(session.LocalPlayerId).Weapon;
+            string text = weapon == null ? s.Get("hud.fists")
+                : s.Format("hud.weapon", s.Get(weapon.Definition.NameKey), weapon.Remaining, weapon.Capacity);
+            var rect = new Rect(Screen.width - 316, Screen.height - 96, 300, 24);
+            var style = new GUIStyle(label) { alignment = TextAnchor.MiddleRight };
+            ShadowLabel(rect, text, style);
         }
 
         static void DrawChargeBar(Rect rect, float charge)
