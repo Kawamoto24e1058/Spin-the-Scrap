@@ -172,7 +172,7 @@ namespace SpinTheScrap.World
 
         static void DisableOtherCameras()
         {
-            foreach (var cam in FindObjectsByType<Camera>(FindObjectsSortMode.None)) cam.gameObject.SetActive(false);
+            foreach (var cam in FindObjectsByType<Camera>()) cam.gameObject.SetActive(false);
         }
 
         static void BuildLighting()
@@ -185,7 +185,7 @@ namespace SpinTheScrap.World
             RenderSettings.fogStartDistance = 6f;
             RenderSettings.fogEndDistance = 26f;
 
-            foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None)) light.gameObject.SetActive(false);
+            foreach (var light in FindObjectsByType<Light>()) light.gameObject.SetActive(false);
         }
 
         void BuildRoom()
