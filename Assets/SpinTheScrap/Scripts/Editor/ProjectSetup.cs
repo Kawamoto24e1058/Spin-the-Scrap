@@ -15,10 +15,13 @@ namespace SpinTheScrap.EditorTools
         const string SettingsFolder = "Assets/SpinTheScrap/Settings";
         const string PipelinePath = SettingsFolder + "/URP.asset";
         const string RendererPath = SettingsFolder + "/URP_Renderer.asset";
+        const string TemplateMaterialPath = "Assets/SpinTheScrap/Resources/" + MaterialUtil.TemplateResourcePath + ".mat";
         const string DefaultPostProcessDataPath = "Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset";
 
         /// <summary>PlayerSettings.activeInputHandler の値。0 = Input Manager（旧）、1 = Input System、2 = 両方。</summary>
         const int InputSystemOnly = 1;
+
+        static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
 
         [MenuItem("Spin the Scrap/Set Up Project (URP + Input System)", priority = 40)]
         public static void SetUpProject()
@@ -55,6 +58,26 @@ namespace SpinTheScrap.EditorTools
                 QualitySettings.renderPipeline = pipeline;
             }
             QualitySettings.SetQualityLevel(current, false);
+
+            CreateTemplateMaterial(pipeline);
+        }
+
+        /// <summary>MaterialUtil が複製する元のマテリアル。Resources に置くとシェーダーがビルドに含まれる。</summary>
+        static void CreateTemplateMaterial(UniversalRenderPipelineAsset pipeline)
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(TemplateMaterialPath);
+            if (mat == null)
+            {
+                var shader = pipeline.defaultShader;
+                if (shader == null) return;
+                Directory.CreateDirectory(Path.GetDirectoryName(TemplateMaterialPath));
+                AssetDatabase.Refresh();
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, TemplateMaterialPath);
+            }
+            // 既定の 0.5 だと懐中電灯の照り返しで近くの物が白く飛ぶ
+            mat.SetFloat(SmoothnessId, 0.15f);
+            EditorUtility.SetDirty(mat);
         }
 
         static bool SetUpInputSystem()

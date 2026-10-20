@@ -26,14 +26,14 @@
 
 ## はじめかた
 
-1. Unity Hub で **Unity 6（6000.0 系）** をインストールする
+1. Unity Hub で **Unity 6（6000.4.6f1）** をインストールする
 2. Unity Hub →「Add project from disk」でこのリポジトリのルートを開く
-   - `ProjectVersion.txt` と違うバージョンを使う場合は、Hub の案内どおりに開いて問題ありません
-   - Input System を有効にするか聞かれたら「Yes」（無効のままでも旧 Input Manager で動きます）
-3. メニュー **Spin the Scrap → Create Phase 0 Scene** を実行
-   → `Assets/SpinTheScrap/Scenes/Phase0.unity` が作られて開くので、Play
+3. `Assets/SpinTheScrap/Scenes/Phase0.unity` を開いて Play
 
-URP を使う場合は、Project ウィンドウで *Create → Rendering → URP Asset (with Universal Renderer)* を作り、*Project Settings → Graphics* に割り当ててください。未設定の間は Built-in レンダラーで描画されます（マテリアルはコードで作っており、どちらでも色が付きます）。
+URP Asset（`Assets/SpinTheScrap/Settings/URP.asset`）、入力方式（Input System）、シーンは設定済みです。作り直すときはメニューから実行します。
+
+- **Spin the Scrap → Set Up Project (URP + Input System)**：URP Asset を作って Graphics・Quality に割り当て、入力方式を Input System にする。仮マテリアルの元になる `Resources/Materials/PrototypeLit.mat` も作る（どのアセットからも参照されないシェーダーはビルドから外れてピンクになるため）
+- **Spin the Scrap → Create Phase 0 Scene**：`Phase0.unity` を作り直す
 
 ### 操作（フェーズ 0）
 

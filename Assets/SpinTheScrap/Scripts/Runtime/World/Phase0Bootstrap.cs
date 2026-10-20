@@ -217,10 +217,10 @@ namespace SpinTheScrap.World
             Block(root, "Pillar 1", new Vector3(-3f, 2f, 7f), new Vector3(0.6f, 4f, 0.6f), WallColor);
             Block(root, "Pillar 2", new Vector3(2f, 2f, -4f), new Vector3(0.6f, 4f, 0.6f), WallColor);
 
-            // 非常灯（緑）と、拠点側の明るい灯り
-            PointLight(root, new Vector3(-6f, 3.6f, 6f), new Color(0.5f, 1f, 0.6f), 9f, 1.2f);
-            PointLight(root, new Vector3(7f, 3.8f, 6f), new Color(0.5f, 1f, 0.6f), 8f, 1f);
-            PointLight(root, new Vector3(0f, 3.6f, -9.5f), new Color(1f, 0.9f, 0.7f), 8f, 1.6f);
+            // 非常灯（緑）と、拠点側の明るい灯り。URP の点光源は距離の 2 乗で減衰するので強めにする
+            PointLight(root, new Vector3(-6f, 3.6f, 6f), new Color(0.5f, 1f, 0.6f), 9f, 6f);
+            PointLight(root, new Vector3(7f, 3.8f, 6f), new Color(0.5f, 1f, 0.6f), 8f, 5f);
+            PointLight(root, new Vector3(0f, 3.6f, -9.5f), new Color(1f, 0.9f, 0.7f), 8f, 8f);
 
             floorSpots.AddRange(new[]
             {

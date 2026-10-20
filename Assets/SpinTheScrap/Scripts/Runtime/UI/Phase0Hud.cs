@@ -45,14 +45,14 @@ namespace SpinTheScrap.UI
             var run = session.Run;
 
             // 照準
-            GUI.Label(new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24), "+", center);
+            ShadowLabel(new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24), "+", center);
 
             // 左上：ランの状況
             string status = s.Format("base.status", run.Cycle, run.DivesCompletedInCycle + 1, run.Config.DivesPerCycle,
                 session.Money(run.Money), session.Money(run.Quota));
-            GUI.Label(new Rect(16, 12, 900, 24), status, label);
-            GUI.Label(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
-            GUI.Label(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
+            ShadowLabel(new Rect(16, 12, 900, 24), status, label);
+            ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
+            ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
 
             // 照準の下：見ている物・持っている物
             float y = Screen.height / 2f + 24;
@@ -86,7 +86,7 @@ namespace SpinTheScrap.UI
                 GUI.color = prev;
             }
 
-            GUI.Label(new Rect(16, Screen.height - 28, Screen.width - 32, 24), s.Get("hud.controls"), label);
+            ShadowLabel(new Rect(16, Screen.height - 28, Screen.width - 32, 24), s.Get("hud.controls"), label);
         }
 
         void DescribeScrap(Scrap scrap, ref float y)
@@ -103,8 +103,20 @@ namespace SpinTheScrap.UI
 
         void Line(string text, ref float y)
         {
-            GUI.Label(new Rect(Screen.width / 2f - 300, y, 600, 24), text, center);
+            ShadowLabel(new Rect(Screen.width / 2f - 300, y, 600, 24), text, center);
             y += 22;
+        }
+
+        /// <summary>明るい物の手前でも読めるよう、黒い影を付けて描く。</summary>
+        void ShadowLabel(Rect rect, string text, GUIStyle style)
+        {
+            var color = style.normal.textColor;
+            style.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+                if (dx != 0 || dy != 0) GUI.Label(new Rect(rect.x + dx * 1.5f, rect.y + dy * 1.5f, rect.width, rect.height), text, style);
+            style.normal.textColor = color;
+            GUI.Label(rect, text, style);
         }
 
         void EnsureStyles()

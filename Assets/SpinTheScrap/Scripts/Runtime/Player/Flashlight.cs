@@ -7,7 +7,8 @@ namespace SpinTheScrap.Player
     {
         [SerializeField] float range = 18f;
         [SerializeField] float spotAngle = 55f;
-        [SerializeField] float intensity = 3f;
+        [Tooltip("URP は距離の 2 乗で減衰する。10m 先の壁がうっすら見える程度")]
+        [SerializeField] float intensity = 14f;
 
         Light spot;
 
