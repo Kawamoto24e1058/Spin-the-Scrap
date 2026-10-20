@@ -132,6 +132,8 @@ namespace SpinTheScrap.Core
         SpinCostMultiplier,
         /// <summary>割れ物が割れても価値が Amount（割合）残る。潜行側で参照する。</summary>
         BrokenFragileKeepsValue,
+        /// <summary>店で即売するときの価格を ×Amount（重ね掛け可）。</summary>
+        SellPriceMultiplier,
     }
 
     /// <summary>レリック（ラン中の永続強化）定義（要件書 5.3）。</summary>

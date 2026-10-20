@@ -20,6 +20,26 @@ symbol.plush_arm.name,ぬいぐるみの片腕,Plush Arm
 symbol.plush_arm.desc,盤面の他の人形1つにつき+1。,+1 for each other Doll on the board.
 symbol.safe_door.name,金庫の扉,Safe Door
 symbol.safe_door.desc,同じ列の金属1つにつき+3。1人では持ち上がらない。,+3 for each Metal in the same column. Too heavy to lift alone.
+symbol.bent_spoon.name,曲がったスプーン,Bent Spoon
+symbol.bent_spoon.desc,隣接する食べ物1つにつき+1。,+1 for each adjacent Food.
+symbol.lunch_box.name,古い弁当箱,Old Lunch Box
+symbol.lunch_box.desc,隣接する食べ物1つにつき+3。,+3 for each adjacent Food.
+symbol.tin_robot.name,ブリキのロボット,Tin Robot
+symbol.tin_robot.desc,盤面のおもちゃ1つにつき+1。金属・電化製品でもある。,+1 for each Toy on the board. Also Metal and Electric.
+symbol.jack_in_the_box.name,びっくり箱,Jack-in-the-Box
+symbol.jack_in_the_box.desc,1/3で盤面×2。,"1 in 3: board ×2."
+symbol.old_newspaper.name,古新聞の束,Old Newspapers
+symbol.old_newspaper.desc,隣接する紙1つにつき+1。,+1 for each adjacent Paper.
+symbol.losing_ticket.name,外れ馬券,Losing Ticket
+symbol.losing_ticket.desc,盤面のギャンブル1つにつき+2。,+2 for each Gamble on the board.
+symbol.pair_of_dice.name,サイコロ,Pair of Dice
+symbol.pair_of_dice.desc,1/6で×12。外れても消えない。,"1 in 6: ×12. Never disappears."
+symbol.rusty_horseshoe.name,錆びた蹄鉄,Rusty Horseshoe
+symbol.rusty_horseshoe.desc,盤面の幸運1つにつき+1。,+1 for each Luck on the board.
+symbol.creepy_doll.name,髪の伸びる人形,Creepy Doll
+symbol.creepy_doll.desc,盤面の呪い1つにつき+2。盤面に出るたびに次の潜行で敵が増える。,+2 for each Curse on the board. Each spin it shows up adds an enemy next dive.
+symbol.broken_vending_machine.name,壊れた自販機,Broken Vending Machine
+symbol.broken_vending_machine.desc,盤面の電化製品1つにつき+2。1人では持ち上がらない。,+2 for each Electric on the board. Too heavy to lift alone.
 # --- レリック ---
 relic.magnet_charm.name,磁石のお守り,Magnet Charm
 relic.magnet_charm.desc,金属タグの値+3。,Metal symbols +3.
@@ -31,6 +51,16 @@ relic.cursed_glove.name,呪いの軍手,Cursed Work Glove
 relic.cursed_glove.desc,呪いタグの値×1.5。,Curse symbols ×1.5.
 relic.worn_lever.name,すり減ったレバー,Worn Lever
 relic.worn_lever.desc,回す費用×0.8。,Spin cost ×0.8.
+relic.holed_coin.name,穴あきコイン,Holed Coin
+relic.holed_coin.desc,幸運タグの値×2。,Luck symbols ×2.
+relic.toy_box_key.name,おもちゃ箱の鍵,Toy Box Key
+relic.toy_box_key.desc,おもちゃタグの値+2。,Toy symbols +2.
+relic.rubber_gloves.name,ゴム手袋,Rubber Gloves
+relic.rubber_gloves.desc,電化製品タグの値×1.5。,Electric symbols ×1.5.
+relic.gamblers_notebook.name,ギャンブラーの手帳,Gambler's Notebook
+relic.gamblers_notebook.desc,ギャンブルタグの値×1.5。,Gamble symbols ×1.5.
+relic.rusty_scale.name,錆びた秤,Rusty Scale
+relic.rusty_scale.desc,店の売値×1.25。,Shop sell prices ×1.25.
 # --- タグ ---
 tag.Metal,金属,Metal
 tag.Electric,電化製品,Electric

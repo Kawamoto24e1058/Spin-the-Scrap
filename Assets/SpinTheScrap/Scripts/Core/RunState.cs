@@ -112,10 +112,18 @@ namespace SpinTheScrap.Core
         /// <summary>店で即売する。valueFactor は割れ物の破損などによる価値の割合。</summary>
         public double SellScrap(string symbolId, double valueFactor = 1)
         {
-            var def = db.GetSymbol(symbolId);
-            double price = Math.Floor(def.SellPrice * Math.Max(0, valueFactor));
+            double price = SellPriceFor(symbolId, valueFactor);
             Money += price;
             return price;
+        }
+
+        /// <summary>即売したときの価格（割れ物の状態とレリック「錆びた秤」などを含む）。</summary>
+        public double SellPriceFor(string symbolId, double valueFactor = 1)
+        {
+            double price = db.GetSymbol(symbolId).SellPrice * Math.Max(0, valueFactor);
+            foreach (var r in relics)
+                if (r.Kind == RelicKind.SellPriceMultiplier) price *= r.Amount;
+            return Math.Floor(price);
         }
 
         public SymbolInstance AddToReel(string symbolId, int ownerId)

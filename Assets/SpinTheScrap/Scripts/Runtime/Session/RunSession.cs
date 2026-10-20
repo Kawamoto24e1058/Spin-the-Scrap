@@ -88,7 +88,7 @@ namespace SpinTheScrap.Session
             Message = Strings.Format("base.downed", lostCount);
         }
 
-        public double SellPriceOf(HaulItem item) => Math.Floor(Content.GetSymbol(item.SymbolId).SellPrice * item.ValueFactor);
+        public double SellPriceOf(HaulItem item) => Run.SellPriceFor(item.SymbolId, item.ValueFactor);
 
         public void Sell(HaulItem item)
         {
