@@ -16,7 +16,27 @@ namespace SpinTheScrap.World
     public sealed class BuiltFacility
     {
         public Transform Root;
+        public FacilityLayout Layout;
         public readonly List<BuiltRoom> Rooms = new List<BuiltRoom>();
+
+        /// <summary>ワールド座標がどの部屋の中か（部屋の外なら null）。</summary>
+        public RoomPlan RoomAt(Vector3 position) =>
+            Layout.At(Mathf.RoundToInt(position.x / FacilityBuilder.RoomSize), Mathf.RoundToInt(position.z / FacilityBuilder.RoomSize));
+
+        /// <summary>room から dir 側のドアを抜けて、隣の部屋に少し入った位置。敵の経路の中継点に使う。</summary>
+        public Vector3 DoorPassPoint(RoomPlan room, Direction dir, float intoNext = 1.2f)
+        {
+            var center = FacilityBuilder.RoomCenter(room);
+            var step = FacilityBuilder.DirectionVector(dir);
+            return center + step * (FacilityBuilder.RoomSize / 2f + intoNext);
+        }
+
+        /// <summary>room の中で、dir 側のドアの手前の位置。</summary>
+        public Vector3 DoorApproachPoint(RoomPlan room, Direction dir, float before = 1.2f)
+        {
+            var center = FacilityBuilder.RoomCenter(room);
+            return center + FacilityBuilder.DirectionVector(dir) * (FacilityBuilder.RoomSize / 2f - before);
+        }
     }
 
     public sealed class BuiltRoom
@@ -51,9 +71,21 @@ namespace SpinTheScrap.World
 
         public static Vector3 RoomCenter(RoomPlan room) => new Vector3(room.X * RoomSize, 0f, room.Y * RoomSize);
 
+        /// <summary>格子の向きをワールドの向きに直す（北 = +Z、東 = +X）。</summary>
+        public static Vector3 DirectionVector(Direction dir)
+        {
+            switch (dir)
+            {
+                case Direction.North: return Vector3.forward;
+                case Direction.East: return Vector3.right;
+                case Direction.South: return Vector3.back;
+                default: return Vector3.left;
+            }
+        }
+
         public static BuiltFacility Build(FacilityLayout layout)
         {
-            var facility = new BuiltFacility { Root = new GameObject("Facility").transform };
+            var facility = new BuiltFacility { Root = new GameObject("Facility").transform, Layout = layout };
             foreach (var plan in layout.Rooms)
             {
                 var root = new GameObject("Room " + plan.X + "," + plan.Y + " " + plan.Kind).transform;

@@ -13,6 +13,8 @@ namespace SpinTheScrap.Player
         Light spot;
 
         public bool IsOn => spot != null && spot.enabled;
+        /// <summary>光の広がり（円錐の全角、度）。敵が「照らされた」と判断するのに使う。</summary>
+        public float SpotAngle => spotAngle;
 
         void Awake()
         {

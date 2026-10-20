@@ -38,6 +38,7 @@ namespace SpinTheScrap.Session
         public StringTable Strings { get; private set; }
         public RunState Run { get; private set; }
         public HazardRules Hazards { get; } = new HazardRules();
+        public EnemyRules Enemies { get; } = new EnemyRules();
         public IReadOnlyList<HaulItem> Haul => haul;
         public SpinResult LastSpin { get; private set; }
         /// <summary>直前の操作の結果メッセージ（返済結果など）。</summary>

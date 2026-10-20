@@ -46,6 +46,8 @@ namespace SpinTheScrap.World
             spawnRng = new Rng((ulong)System.Environment.TickCount);
             health.Init(session.Hazards);
             health.Downed += OnPlayerDowned;
+            NoiseEvents.Rules = session.Enemies;
+            player.GetComponent<PlayerNoise>().Init(session.Enemies);
 
             var hud = gameObject.AddComponent<Phase0Hud>();
             hud.Init(session, player, interactor, zone, health);
@@ -60,6 +62,7 @@ namespace SpinTheScrap.World
         {
             if (session != null) session.DiveStarted -= OnDiveStarted;
             if (health != null) health.Downed -= OnPlayerDowned;
+            Time.timeScale = 1f;
         }
 
         /// <summary>倒れたら、持っている物をすべて失って拠点に戻る。運び出し済みの物は残る。</summary>
@@ -91,6 +94,8 @@ namespace SpinTheScrap.World
             // メニューを開いたらカーソルを出し、閉じたら（Tab・Esc・「次の潜行へ」のどれでも）戻す
             if (basePanel.Visible != panelWasVisible) SetCursorLocked(!basePanel.Visible);
             panelWasVisible = basePanel.Visible;
+            // ソロでは拠点メニューを開いている間は時間を止める（敵も止まる）。フェーズ 1 の協力プレイでは止めない
+            Time.timeScale = basePanel.Visible ? 0f : 1f;
 
             bool playing = !basePanel.Visible && Cursor.lockState == CursorLockMode.Locked;
             player.InputEnabled = playing;
@@ -124,12 +129,12 @@ namespace SpinTheScrap.World
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
             SpawnHazards();
+            SpawnEnemies(enemyBonus);
             health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
             player.transform.SetPositionAndRotation(playerSpawn, Quaternion.identity);
             player.Controller.enabled = true;
-            // 敵はフェーズ 0 の対象外。enemyBonus は HUD の表示のみ（BasePanel）
         }
 
         /// <summary>部屋ごとに、深さに応じた数と珍しさでガラクタを置く。特大は入口以外のどこか 1 部屋に必ず 1 個。</summary>
@@ -167,6 +172,24 @@ namespace SpinTheScrap.World
                 if (spawnRng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
                 var puddle = FacilityBuilder.CreatePuddle(room.Root, room.PuddleSpot.Value, out var surface, out var glow);
                 puddle.Init(rules, id => content.GetSymbol(id).Tags, health, surface, glow);
+            }
+        }
+
+        /// <summary>
+        /// 敵を奥の部屋から順に 1 部屋 1 体ずつ置く。入口には置かない。
+        /// 数はサイクルと、マネキンの首などで増えた分（enemyBonus）で決まる。
+        /// </summary>
+        void SpawnEnemies(int enemyBonus)
+        {
+            var rules = session.Enemies;
+            var run = session.Run;
+            int count = rules.CountFor(run.Cycle, enemyBonus, facility.Rooms.Count);
+            var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance)
+                .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).Take(count);
+            foreach (var room in rooms)
+            {
+                var position = FacilityBuilder.RoomCenter(room.Plan) + new Vector3(3f, 0f, 3f);
+                Enemies.Lurker.Spawn(facility.Root, position, rules, facility, player, health, flashlight, spawnRng.NextULong());
             }
         }
 
@@ -246,6 +269,7 @@ namespace SpinTheScrap.World
             go.AddComponent<Inventory>();
             interactor = go.AddComponent<Interactor>();
             health = go.AddComponent<PlayerHealth>();
+            go.AddComponent<PlayerNoise>();
         }
     }
 }

@@ -8,6 +8,12 @@ namespace SpinTheScrap.Interaction
     /// 廃墟に落ちているガラクタ 1 個。持ち帰るとシンボル（SymbolId）としてリールに入れられる。
     /// 割れ物は落下や衝突で状態（Integrity）が下がり、強い衝撃で割れる（要件書 4.1）。
     /// </summary>
+    /// <summary>投げたガラクタが当たったときに反応する物（敵など）。</summary>
+    public interface IScrapHittable
+    {
+        void OnHitByScrap(Scrap scrap, float impactSpeed);
+    }
+
     [RequireComponent(typeof(Rigidbody))]
     public sealed class Scrap : MonoBehaviour
     {
@@ -83,13 +89,22 @@ namespace SpinTheScrap.Interaction
 
         void OnCollisionEnter(Collision collision)
         {
-            if (!fragile || IsBroken) return;
             float speed = collision.relativeVelocity.magnitude;
+            // 手に持って運んでいる間の小さな接触は音にしない
+            if (!IsHeld) World.NoiseEvents.Impact(transform.position, speed);
+            var hittable = collision.collider.GetComponentInParent<IScrapHittable>();
+            if (hittable != null) hittable.OnHitByScrap(this, speed);
+
+            if (!fragile || IsBroken) return;
             if (speed < crackSpeed) return;
 
             integrity = Mathf.Clamp01(integrity - (speed - crackSpeed) / (breakSpeed - crackSpeed));
             Tint(Color.Lerp(new Color(0.15f, 0.15f, 0.15f), Color.white, integrity));
-            if (IsBroken) Broken?.Invoke(this);
+            if (IsBroken)
+            {
+                World.NoiseEvents.Break(transform.position);
+                Broken?.Invoke(this);
+            }
         }
 
         void Tint(Color multiplier)

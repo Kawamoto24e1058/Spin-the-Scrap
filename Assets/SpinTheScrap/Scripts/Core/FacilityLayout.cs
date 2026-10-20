@@ -70,6 +70,44 @@ namespace SpinTheScrap.Core
 
         public static Direction Opposite(Direction direction) => (Direction)(((int)direction + 2) % 4);
 
+        /// <summary>
+        /// from から to までドアを通ってたどる部屋の列（両端を含む）。間取りは木なので道は 1 通り。
+        /// 敵が部屋をまたいで移動するときに使う。
+        /// </summary>
+        public List<RoomPlan> Path(RoomPlan from, RoomPlan to)
+        {
+            if (from == null) throw new ArgumentNullException(nameof(from));
+            if (to == null) throw new ArgumentNullException(nameof(to));
+            var previous = new Dictionary<RoomPlan, RoomPlan> { { from, null } };
+            var queue = new Queue<RoomPlan>();
+            queue.Enqueue(from);
+            while (queue.Count > 0 && !previous.ContainsKey(to))
+            {
+                var room = queue.Dequeue();
+                for (int d = 0; d < 4; d++)
+                {
+                    if (!room.HasDoor((Direction)d)) continue;
+                    var next = Neighbor(room, (Direction)d);
+                    if (next == null || previous.ContainsKey(next)) continue;
+                    previous[next] = room;
+                    queue.Enqueue(next);
+                }
+            }
+            var path = new List<RoomPlan>();
+            if (!previous.ContainsKey(to)) return path;
+            for (var r = to; r != null; r = previous[r]) path.Add(r);
+            path.Reverse();
+            return path;
+        }
+
+        /// <summary>隣り合う 2 部屋の間のドアの向き（a から見て）。ドアがなければ null。</summary>
+        public static Direction? DoorBetween(RoomPlan a, RoomPlan b)
+        {
+            for (int d = 0; d < 4; d++)
+                if (a.X + Dx[d] == b.X && a.Y + Dy[d] == b.Y && a.HasDoor((Direction)d)) return (Direction)d;
+            return null;
+        }
+
         public static FacilityLayout Generate(ulong seed, int roomCount)
         {
             if (roomCount < 1) throw new ArgumentOutOfRangeException(nameof(roomCount));
