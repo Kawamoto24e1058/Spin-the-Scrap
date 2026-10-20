@@ -30,6 +30,9 @@ namespace SpinTheScrap.Player
 
         CharacterController controller;
         float pitch;
+        bool tethered;
+        Vector3 tetherPoint;
+        float tetherLength;
         float verticalVelocity;
 
         public Camera ViewCamera => viewCamera;
@@ -40,9 +43,21 @@ namespace SpinTheScrap.Player
         public float LoadKg { get; set; }
         /// <summary>大・特大を抱えているときは走れない。</summary>
         public bool RunBlocked { get; set; }
+        /// <summary>重さとは別に掛ける移動速度の倍率（特大を引きずるときなど）。</summary>
+        public float SpeedMultiplier { get; set; } = 1f;
         public float LoadFactor => Mathf.Clamp01(LoadKg / maxLoadKg);
 
         public void SetCamera(Camera cam) => viewCamera = cam;
+
+        /// <summary>水平方向でこの点から length より遠くへは歩けなくする（特大を引きずるとき）。</summary>
+        public void SetTether(Vector3 point, float length)
+        {
+            tethered = true;
+            tetherPoint = point;
+            tetherLength = length;
+        }
+
+        public void ClearTether() => tethered = false;
 
         void Awake()
         {
@@ -71,8 +86,9 @@ namespace SpinTheScrap.Player
 
             var input = InputEnabled ? GameInput.Move : Vector2.zero;
             bool running = InputEnabled && GameInput.RunHeld && !RunBlocked && input.y > 0f;
-            float speed = (running ? runSpeed : walkSpeed) * Mathf.Lerp(1f, minSpeedFactor, load);
+            float speed = (running ? runSpeed : walkSpeed) * Mathf.Lerp(1f, minSpeedFactor, load) * SpeedMultiplier;
             var horizontal = (transform.right * input.x + transform.forward * input.y) * speed;
+            if (tethered) horizontal = ApplyTether(horizontal);
 
             if (controller.isGrounded)
             {
@@ -89,6 +105,18 @@ namespace SpinTheScrap.Player
             float vertical = (previousVertical + verticalVelocity) * 0.5f;
 
             controller.Move((horizontal + Vector3.up * vertical) * Time.deltaTime);
+        }
+
+        /// <summary>引き綱の長さを超えて離れる方向の速度を取り除く。近づく・回り込む動きはそのまま。</summary>
+        Vector3 ApplyTether(Vector3 velocity)
+        {
+            var away = transform.position - tetherPoint;
+            away.y = 0f;
+            float distance = away.magnitude;
+            if (distance < tetherLength || distance < 0.001f) return velocity;
+            var outward = away / distance;
+            float outwardSpeed = Vector3.Dot(velocity, outward);
+            return outwardSpeed > 0f ? velocity - outward * outwardSpeed : velocity;
         }
 
         /// <summary>歩いてぶつかった小物を軽く押す。重い物はほとんど動かない。</summary>

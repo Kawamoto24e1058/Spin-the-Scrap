@@ -23,8 +23,16 @@ namespace SpinTheScrap.Interaction
         [SerializeField] float damping = 120f;
         [Tooltip("大を抱えるときの最大の力 (N)。8kg の重さ 78N を十分に上回る")]
         [SerializeField] float largeMaxForce = 600f;
-        [Tooltip("特大を 1 人でつかむときの最大の力 (N)。40kg の重さ 392N を下回るので 1 人では持ち上がらない")]
+        [Tooltip("特大を 1 人で持ち上げる力の上限 (N)。40kg の重さ 392N を下回るので 1 人では持ち上がらず、2 人なら持ち上がる")]
         [SerializeField] float hugeMaxForce = 260f;
+        [Tooltip("特大を水平に引っ張る力の上限 (N)。床との摩擦（約 235N）を少し上回り、1 人でもゆっくり引きずれる")]
+        [SerializeField] float hugeDragForce = 300f;
+        [Tooltip("特大を持っている間、つかんだ点からこれ以上は歩いて離れられない (m)。breakDistance より短くして手が離れないようにする")]
+        [SerializeField] float hugeTetherLength = 1.9f;
+        [Tooltip("特大は、つかんだ点と目の距離がこれを超えたら手を離す (m)。振り向いただけでは離れない")]
+        [SerializeField] float hugeBreakDistance = 3.2f;
+        [Tooltip("特大を 1 人で引きずっている間の移動速度の倍率")]
+        [SerializeField, Range(0, 1)] float hugeDragSpeedFactor = 0.35f;
         [SerializeField] float heldAngularDamping = 6f;
 
         [Header("Throw")]
@@ -81,6 +89,10 @@ namespace SpinTheScrap.Interaction
 
             controller.LoadKg = CurrentLoadKg();
             controller.RunBlocked = held != null && held.Size != ScrapSize.Small;
+            bool draggingHuge = held != null && held.Size == ScrapSize.Huge;
+            if (draggingHuge) controller.SetTether(held.transform.TransformPoint(heldLocalAnchor), hugeTetherLength);
+            else controller.ClearTether();
+            controller.SpeedMultiplier = draggingHuge ? hugeDragSpeedFactor : 1f;
         }
 
         void FixedUpdate()
@@ -225,16 +237,27 @@ namespace SpinTheScrap.Interaction
             var anchor = held.transform.TransformPoint(heldLocalAnchor);
             var target = Cam.transform.position + Cam.transform.forward * holdDistance;
             var offset = target - anchor;
-            if (offset.magnitude > breakDistance)
+            bool tooFar = held.Size == ScrapSize.Huge
+                ? Vector3.Distance(Cam.transform.position, anchor) > hugeBreakDistance
+                : offset.magnitude > breakDistance;
+            if (tooFar)
             {
                 Release();
                 return;
             }
 
-            float maxForce = held.Size == ScrapSize.Huge ? hugeMaxForce : largeMaxForce;
             // 小を手で持つ場合も大と同じ扱い（軽いのでほぼ追従する）
             var force = offset * (stiffness * body.mass / 8f) - body.GetPointVelocity(anchor) * (damping * body.mass / 8f);
-            force = Vector3.ClampMagnitude(force, maxForce);
+            if (held.Size == ScrapSize.Huge)
+            {
+                // 持ち上げる力と引っ張る力の上限を分ける。1 人では持ち上がらないが、引きずることはできる
+                var horizontal = Vector3.ClampMagnitude(new Vector3(force.x, 0f, force.z), hugeDragForce);
+                force = horizontal + Vector3.up * Mathf.Clamp(force.y, -hugeMaxForce, hugeMaxForce);
+            }
+            else
+            {
+                force = Vector3.ClampMagnitude(force, largeMaxForce);
+            }
             body.AddForceAtPosition(force, anchor, ForceMode.Force);
         }
 
