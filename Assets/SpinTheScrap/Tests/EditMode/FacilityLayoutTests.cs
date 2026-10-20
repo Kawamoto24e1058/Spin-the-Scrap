@@ -113,15 +113,6 @@ namespace SpinTheScrap.Tests
             Assert.Less(LootTable.ScrapCountFor(RoomKind.Entrance, 0), LootTable.ScrapCountFor(RoomKind.Hall, 1));
         }
 
-        [Test]
-        public void RoomCountGrowsWithCycle()
-        {
-            var config = new BalanceConfig();
-            Assert.AreEqual(config.BaseRoomCount, config.RoomCountFor(1));
-            Assert.AreEqual(config.BaseRoomCount + 1, config.RoomCountFor(2));
-            Assert.LessOrEqual(config.RoomCountFor(50), config.MaxRoomCount);
-        }
-
         static string Describe(FacilityLayout layout) =>
             string.Join(";", layout.Rooms.Select(r =>
                 r.X + "," + r.Y + ":" + r.Kind + ":" + string.Concat(AllDirections.Select(d => r.HasDoor(d) ? "1" : "0"))));

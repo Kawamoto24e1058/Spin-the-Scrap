@@ -8,8 +8,8 @@ using UnityEngine;
 namespace SpinTheScrap.UI
 {
     /// <summary>
-    /// 拠点メニュー（IMGUI の仮 UI）。店（即売）・リールへの投入・闇市（レリック / 廃棄）・スロット・返済日をまとめて操作する。
-    /// フェーズ 0 では「潜って運んで賭ける」ループを 1 人で通すための検証用。
+    /// スロット台のメニュー（IMGUI の仮 UI）。台に入れたガラクタを「リールに入れる」か「メダルに換える」か選び、
+    /// 回して道具を出し、レリックの購入・シンボルの廃棄、次の階層への移動をまとめて操作する（docs/floor-design.md）。
     /// </summary>
     public sealed class BasePanel : MonoBehaviour
     {
@@ -34,6 +34,8 @@ namespace SpinTheScrap.UI
         float cellWidth = 96f;
 
         public bool Visible { get; set; }
+        /// <summary>倒れて開いた（閉じられず、「やり直す」だけが押せる）。Phase0Bootstrap が設定する。</summary>
+        public bool OnDownedScreen { get; set; }
 
         public void Init(RunSession runSession) => session = runSession;
 
@@ -55,9 +57,9 @@ namespace SpinTheScrap.UI
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(new Rect(area.x + 10, area.y + 10, area.width - 20, area.height - 20));
 
-            GUILayout.Label(s.Get("base.title") + (run.IsEndless ? "  [" + s.Get("base.endless") + "]" : ""));
-            GUILayout.Label(s.Format("base.status", run.Cycle, run.DivesCompletedInCycle + (run.IsPaydayDue ? 0 : 1),
-                run.Config.DivesPerCycle, session.Money(run.Money), session.Money(run.Quota)));
+            GUILayout.Label(s.Get("base.title"));
+            GUILayout.Label(s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals)));
+            GUILayout.Label(ObjectiveText.Describe(session));
             if (run.PendingEnemyBonus > 0) GUILayout.Label(s.Format("base.enemy_bonus", run.PendingEnemyBonus));
             if (!string.IsNullOrEmpty(session.Message)) GUILayout.Label(session.Message);
 
@@ -99,7 +101,7 @@ namespace SpinTheScrap.UI
                 GUILayout.BeginHorizontal();
                 string condition = item.ValueFactor < 1 ? " (" + Mathf.RoundToInt((float)item.ValueFactor * 100) + "%)" : "";
                 GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(labelWidth * 0.6f));
-                if (GUILayout.Button(s.Format("base.sell", session.Money(session.SellPriceOf(item))))) pending = () => { session.Sell(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
+                if (GUILayout.Button(s.Format("base.to_medals", session.Medals(session.MedalValueOf(item))))) pending = () => { session.ConvertToMedals(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
                 GUI.enabled = session.CanAddToReel(item);
                 if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => { session.AddToReel(item); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
                 GUI.enabled = true;
@@ -117,9 +119,9 @@ namespace SpinTheScrap.UI
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(session.SymbolName(group.Key) + " ×" + group.Count(), GUILayout.Width(labelWidth));
-                GUI.enabled = run.Money >= run.RemovalFee;
+                GUI.enabled = run.Medals >= run.RemovalFee;
                 int instanceId = group.Last().InstanceId;
-                if (GUILayout.Button(s.Format("base.remove", session.Money(run.RemovalFee))))
+                if (GUILayout.Button(s.Format("base.remove", session.Medals(run.RemovalFee))))
                     pending = () => run.TryRemoveFromReel(instanceId);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
@@ -140,33 +142,41 @@ namespace SpinTheScrap.UI
                 var def = session.Content.GetRelic(id);
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(labelWidth));
-                GUI.enabled = run.Money >= def.Price && run.Relics.Count < run.Config.MaxRelics;
-                if (GUILayout.Button(s.Format("base.buy", session.Money(def.Price)))) pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
+                GUI.enabled = run.Medals >= def.Price && run.Relics.Count < run.Config.MaxRelics;
+                if (GUILayout.Button(s.Format("base.buy", session.Medals(def.Price)))) pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
         }
 
-        /// <summary>道具屋。永続の道具は 1 回だけ、消耗品は上限まで買える。</summary>
+        /// <summary>持ち物（スロットで出た道具・武器）と、直前のスピンで出た物。</summary>
         void DrawTools()
         {
             var s = session.Strings;
             var run = session.Run;
-            GUILayout.Label("■ " + s.Get("base.tool_shop"));
+            if (session.LastRewards != null && session.LastRewards.Count > 0)
+            {
+                GUILayout.Label("■ " + s.Get("base.last_rewards"));
+                foreach (var reward in session.LastRewards)
+                    GUILayout.Label("・" + RewardText(reward));
+                GUILayout.Space(8);
+            }
+            GUILayout.Label("■ " + s.Get("base.inventory"));
             foreach (var tool in run.ToolCatalog.Tools)
             {
-                GUILayout.BeginHorizontal();
                 int owned = run.ToolCount(tool.Id);
-                string count = tool.Permanent ? (owned > 0 ? "  [" + s.Get("base.owned") + "]" : "")
-                                              : "  " + s.Format("base.tool_count", owned, tool.MaxCount);
-                GUILayout.Label(s.Get(tool.NameKey) + count + "：" + s.Get(tool.DescriptionKey), GUILayout.Width(labelWidth * 1.3f));
-                GUI.enabled = run.CanBuyTool(tool.Id);
-                string id = tool.Id;
-                if (GUILayout.Button(s.Format("base.buy", session.Money(tool.Price))))
-                    pending = () => { if (run.TryBuyTool(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.9f); };
-                GUI.enabled = true;
-                GUILayout.EndHorizontal();
+                if (owned <= 0) continue;
+                string count = tool.Permanent ? "" : "  " + s.Format("base.tool_count", owned, tool.MaxCount);
+                GUILayout.Label(s.Get(tool.NameKey) + count + "：" + s.Get(tool.DescriptionKey));
             }
+        }
+
+        string RewardText(SpinReward reward)
+        {
+            var s = session.Strings;
+            if (reward.IsMedals) return s.Format("base.reward_medals", session.Medals(reward.Medals));
+            var def = session.Run.ToolCatalog.Get(reward.ToolId);
+            return def.Permanent ? s.Get(def.NameKey) : s.Format("base.reward_tool", s.Get(def.NameKey), reward.Count);
         }
 
         void DrawSlot()
@@ -174,13 +184,13 @@ namespace SpinTheScrap.UI
             var s = session.Strings;
             var run = session.Run;
             GUI.enabled = run.CanSpin;
-            if (GUILayout.Button(s.Format("base.spin", session.Money(run.CurrentSpinCost)), GUILayout.Height(40))) pending = SpinWithSound;
+            if (GUILayout.Button(s.Format("base.spin", session.Medals(run.CurrentSpinCost)), GUILayout.Height(40))) pending = SpinWithSound;
             GUI.enabled = true;
 
             var spin = session.LastSpin;
             if (spin == null) return;
 
-            GUILayout.Label(s.Format("base.last_spin", session.Money(spin.Total), spin.Lines.Count, spin.BoardMultiplier));
+            GUILayout.Label(s.Format("base.last_spin", session.Medals(spin.Total), spin.Lines.Count, spin.BoardMultiplier));
             for (int row = 0; row < Board.Rows; row++)
             {
                 GUILayout.BeginHorizontal();
@@ -194,7 +204,7 @@ namespace SpinTheScrap.UI
                         int owner = cell.Instance.OwnerId;
                         if (owner >= 0) GUI.color = OwnerColors[owner % OwnerColors.Length];
                         text = session.SymbolName(cell.Instance.SymbolId) + "\n" +
-                               (cell.Destroyed ? "×" : "+" + session.Money(cell.Value)) +
+                               (cell.Destroyed ? "×" : "+" + session.Medals(cell.Value)) +
                                (cell.Triggers > 1 ? " ↻" + cell.Triggers : "");
                     }
                     GUILayout.Box(text, cellStyle, GUILayout.Width(cellWidth), GUILayout.Height(52));
@@ -203,41 +213,40 @@ namespace SpinTheScrap.UI
                 GUILayout.EndHorizontal();
             }
             foreach (var line in spin.Lines)
-                GUILayout.Label("Line " + (line.LineIndex + 1) + "  ×" + line.Length + "  " + TagNames(line.SharedTags) + "  +" + session.Money(line.Bonus));
-            if (spin.CornerBonus > 0) GUILayout.Label("Corners  +" + session.Money(spin.CornerBonus));
+                GUILayout.Label("Line " + (line.LineIndex + 1) + "  ×" + line.Length + "  " + TagNames(line.SharedTags) + "  +" + session.Medals(line.Bonus));
+            if (spin.CornerBonus > 0) GUILayout.Label("Corners  +" + session.Medals(spin.CornerBonus));
         }
 
         void SpinWithSound()
         {
             if (!session.Spin()) return;
             Sfx.Play2D(SfxClips.Spin, 0.7f);
-            var spin = session.LastSpin;
-            // 回す費用より多く当たったらファンファーレ
-            if (spin.Total >= session.Run.CurrentSpinCost * 2) Sfx.Play2D(SfxClips.Win, 0.6f);
+            // 道具が出たらファンファーレ
+            if (session.LastRewards != null && session.LastRewards.Count > 0) Sfx.Play2D(SfxClips.Win, 0.6f);
         }
 
         void DrawFlow()
         {
             var s = session.Strings;
             var run = session.Run;
-            if (run.IsFailed)
+            if (run.IsOver)
             {
                 if (GUILayout.Button(s.Get("base.new_run"), GUILayout.Height(36))) pending = session.NewRun;
                 return;
             }
-            if (run.IsPaydayDue)
+            if (OnDownedScreen)
             {
-                if (GUILayout.Button(s.Format("base.payday", session.Money(run.Quota)), GUILayout.Height(36))) pending = session.ResolvePayday;
+                if (GUILayout.Button(s.Format("base.retry_floor", run.Floor), GUILayout.Height(36)))
+                    pending = () => { session.RestartFloor(); Visible = false; };
                 return;
             }
-            if (GUILayout.Button(s.Get("base.next_dive"), GUILayout.Height(36)))
-            {
-                pending = () =>
-                {
-                    session.FinishDive();
-                    if (!run.IsPaydayDue) Visible = false;
-                };
-            }
+            GUI.enabled = run.Objective.IsComplete;
+            string label = run.Objective.IsComplete
+                ? (run.IsLastFloor ? s.Get("base.finish_run") : s.Format("base.next_floor", run.Floor + 1))
+                : s.Get("base.objective_pending");
+            if (GUILayout.Button(label, GUILayout.Height(36)))
+                pending = () => { if (session.TryAdvanceFloor() && !session.Run.IsOver) Visible = false; };
+            GUI.enabled = true;
         }
 
         string TagNames(SymbolTag tags)

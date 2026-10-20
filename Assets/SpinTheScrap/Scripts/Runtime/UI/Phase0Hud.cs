@@ -59,9 +59,8 @@ namespace SpinTheScrap.UI
             ShadowLabel(new Rect(Screen.width / 2f - 10, Screen.height / 2f - 12, 20, 24), "+", center);
 
             // 左上：ランの状況
-            string status = s.Format("base.status", run.Cycle, run.DivesCompletedInCycle + 1, run.Config.DivesPerCycle,
-                session.Money(run.Money), session.Money(run.Quota));
-            ShadowLabel(new Rect(16, 12, 900, 24), status, label);
+            string status = s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
+            ShadowLabel(new Rect(16, 12, 900, 24), status + "    " + ObjectiveText.Describe(session), label);
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
             // 道具：電池の残り、包帯・爆竹の数
@@ -148,7 +147,7 @@ namespace SpinTheScrap.UI
             var def = session.Content.GetSymbol(scrap.SymbolId);
             Line(session.SymbolName(scrap.SymbolId) + "  [" + s.Get("size." + scrap.Size) + "]", ref y);
             double factor = scrap.ValueFactor(session.Run.BrokenFragileValueRatio);
-            Line(s.Format("hud.value", session.Money(System.Math.Floor(def.SellPrice * factor))), ref y);
+            Line(s.Format("hud.value", session.Medals(session.Run.MedalValueFor(def.Id, factor))), ref y);
             if (scrap.Fragile)
                 Line(scrap.IsBroken ? s.Get("hud.broken") : s.Format("hud.integrity", Mathf.RoundToInt(scrap.Integrity * 100)), ref y);
             Line(s.Get(def.DescriptionKey), ref y);

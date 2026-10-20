@@ -42,7 +42,7 @@ namespace SpinTheScrap.World
 
             session = GetComponent<RunSession>();
             if (session == null) session = gameObject.AddComponent<RunSession>();
-            session.DiveStarted += OnDiveStarted;
+            session.FloorStarted += OnFloorStarted;
             spawnRng = new Rng((ulong)System.Environment.TickCount);
             health.Init(session.Hazards);
             health.Downed += OnPlayerDowned;
@@ -54,13 +54,13 @@ namespace SpinTheScrap.World
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
 
-            OnDiveStarted(0);
+            OnFloorStarted(0);
             SetCursorLocked(true);
         }
 
         void OnDestroy()
         {
-            if (session != null) session.DiveStarted -= OnDiveStarted;
+            if (session != null) session.FloorStarted -= OnFloorStarted;
             if (health != null) health.Downed -= OnPlayerDowned;
             Time.timeScale = 1f;
             AudioListener.pause = false;
@@ -73,6 +73,7 @@ namespace SpinTheScrap.World
             var lost = interactor.Inventory.TakeAll();
             foreach (var scrap in lost) Destroy(scrap.gameObject);
             session.ReportDowned(lost.Count);
+            basePanel.OnDownedScreen = true;
             basePanel.Visible = true;
         }
 
@@ -147,15 +148,16 @@ namespace SpinTheScrap.World
             Cursor.visible = !locked;
         }
 
-        // ---- 潜行ごとのリセット ----
+        // ---- 階層ごとのリセット ----
 
-        void OnDiveStarted(int enemyBonus)
+        void OnFloorStarted(int enemyBonus)
         {
+            basePanel.OnDownedScreen = false;
             if (scrapRoot != null) Destroy(scrapRoot.gameObject);
             if (facility != null) Destroy(facility.Root.gameObject);
 
             var run = session.Run;
-            var layout = FacilityLayout.Generate(spawnRng.NextULong(), run.Config.RoomCountFor(run.Cycle));
+            var layout = FacilityLayout.Generate(spawnRng.NextULong(), run.Config.RoomCountFor(run.Floor));
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
@@ -217,7 +219,7 @@ namespace SpinTheScrap.World
         {
             var rules = session.Enemies;
             var run = session.Run;
-            int count = rules.CountFor(run.Cycle, enemyBonus, facility.Rooms.Count);
+            int count = rules.CountFor(run.Floor, enemyBonus, facility.Rooms.Count);
             var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance)
                 .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).Take(count);
             foreach (var room in rooms)

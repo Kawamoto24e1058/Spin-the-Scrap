@@ -55,13 +55,16 @@ namespace SpinTheScrap.Core
             return Math.Min(speed * ImpactNoisePerSpeed, MaxImpactNoiseRadius);
         }
 
-        /// <summary>潜行に出る敵の数。サイクル 1 で 1 体、サイクルごとに +1、マネキンの首などの増加分を足す。入口以外の部屋数が上限。</summary>
-        public int CountFor(int cycle, int bonus, int roomCount)
+        /// <summary>
+        /// 階層に出る徘徊者の数。階層 1〜2 で 1 体、2 階層ごとに +1、マネキンの首・呪いのラインなどの増加分を足す。
+        /// 入口以外の部屋数が上限（1 部屋 1 体）。
+        /// </summary>
+        public int CountFor(int floor, int bonus, int roomCount)
         {
-            if (cycle < 1) throw new ArgumentOutOfRangeException(nameof(cycle));
+            if (floor < 1) throw new ArgumentOutOfRangeException(nameof(floor));
             if (bonus < 0) throw new ArgumentOutOfRangeException(nameof(bonus));
             int rooms = Math.Max(0, roomCount - 1);
-            return Math.Min(cycle + bonus, rooms);
+            return Math.Min(1 + (floor - 1) / 2 + bonus, rooms);
         }
     }
 

@@ -24,8 +24,8 @@ namespace SpinTheScrap.Tools
             if (opts.ContainsKey("all"))
             {
                 var config = new BalanceConfig();
-                Console.WriteLine($"spin cost (cycle1): {string.Join(" ", Enumerable.Range(0, 8).Select(i => config.SpinCostFor(1, i)))}");
-                Console.WriteLine($"quotas: {string.Join(" ", Enumerable.Range(1, 6).Select(c => config.QuotaFor(c)))}");
+                Console.WriteLine($"spin cost (floor 1): {string.Join(" ", Enumerable.Range(0, 8).Select(i => config.SpinCostFor(1, i)))}");
+                Console.WriteLine($"first spin cost by floor: {string.Join(" ", Enumerable.Range(1, config.FloorCount).Select(f => config.SpinCostFor(f, 0)))}");
                 Console.WriteLine();
                 PrintHeader();
                 Report("(initial reel)", config.StartingReel, db, relics, spins, seed);

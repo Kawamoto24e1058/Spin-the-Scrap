@@ -44,7 +44,7 @@ symbol.broken_vending_machine.desc,盤面の電化製品1つにつき+2。1人�
 relic.magnet_charm.name,磁石のお守り,Magnet Charm
 relic.magnet_charm.desc,金属タグの値+3。,Metal symbols +3.
 relic.regular_card.name,常連カード,Regular's Card
-relic.regular_card.desc,1サイクルの最初の1回は無料。,First spin each cycle is free.
+relic.regular_card.desc,各階層の最初の1回は無料。,First spin on each floor is free.
 relic.bubble_wrap.name,緩衝材,Bubble Wrap
 relic.bubble_wrap.desc,割れ物が割れても価値が半分残る。,Broken fragiles keep half their value.
 relic.cursed_glove.name,呪いの軍手,Cursed Work Glove
@@ -74,15 +74,28 @@ tag.Paper,紙,Paper
 tag.Food,食べ物,Food
 # --- 道具 ---
 tool.cart.name,台車,Push Cart
-tool.cart.desc,潜行のたびに入口に置かれる。大きい物をまとめて運べる。,Waits at the entrance every dive. Haul large scrap in bulk.
+tool.cart.desc,階層のたびにスタート地点に置かれる。大きい物をまとめて運べる。,Waits at the start of every floor. Haul large scrap in bulk.
 tool.insulated_boots.name,絶縁ブーツ,Insulated Boots
 tool.insulated_boots.desc,電気が流れる水たまりのダメージを30%に減らす。,Electrified puddles deal 30% damage.
 tool.battery.name,電池,Battery
 tool.battery.desc,懐中電灯の電池が切れたら自動で交換する。,Swaps in automatically when the flashlight dies.
 tool.bandage.name,包帯,Bandage
 tool.bandage.desc,[H] 体力を40回復する。,[H] Restore 40 health.
+tool.pipe.name,鉄パイプ,Iron Pipe
+tool.pipe.desc,近づいて殴る。数は耐久。,Melee. The count is durability.
+tool.nail_gun.name,釘打ち機,Nail Gun
+tool.nail_gun.desc,離れた敵を撃つ。数は弾数。,Shoot enemies at range. The count is ammo.
+tool.taser.name,スタンガン,Taser
+tool.taser.desc,当てた敵をひるませる。数は使える回数。,Stuns what it hits. The count is charges.
 tool.firecracker.name,爆竹,Firecracker
 tool.firecracker.desc,[Q] 投げると少しして大きな音で鳴り、敵をおびき寄せる。,[Q] Throw it; it bangs loudly a moment later and lures enemies.
+# --- 攻略条件 ---
+objective.label,攻略条件：{0}（{1}）,Objective: {0} ({1})
+objective.done,達成,Done
+objective.FindKey,鍵を探してエレベーターへ,Find the key and bring it to the elevator
+objective.DefeatEnemies,敵を倒す,Defeat enemies
+objective.PowerGenerator,ガラクタで電力をためる,Charge power with scrap
+objective.HaulHuge,特大のガラクタをエレベーターへ,Haul the huge scrap to the elevator
 # --- 運搬区分 ---
 size.Small,小,Small
 size.Large,大,Large
@@ -98,8 +111,8 @@ hud.value,売値 {0},Sell {0}
 hud.integrity,状態 {0}%,Condition {0}%
 hud.broken,割れている,Broken
 hud.load,重量 {0} kg,Load {0} kg
-hud.extract,[F] ガラクタを運び出す（{0}個）,[F] Extract scrap ({0})
-hud.haul,運び出したガラクタ：{0}個,Extracted scrap: {0}
+hud.extract,[F] ガラクタをスロット台に入れる（{0}個）,[F] Feed scrap to the slot machine ({0})
+hud.haul,台に入れたガラクタ：{0}個,Scrap in the machine: {0}
 hud.health,体力 {0}/{1},Health {0}/{1}
 hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spare {1})  Bandage {2}  Firecracker {3}
 hud.push_cart,[E] 台車を押す,[E] Push the cart
@@ -107,11 +120,9 @@ hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G]
 hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
 hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / H Bandage / Q Firecracker / Tab Base menu
 # --- 拠点メニュー ---
-base.title,拠点（ボロアパート）,Base (Shabby Apartment)
-base.status,サイクル {0}  潜行 {1}/{2}  所持金 {3}  ノルマ {4},Cycle {0}  Dive {1}/{2}  Money {3}  Quota {4}
-base.endless,エンドレス,Endless
-base.haul,持ち帰ったガラクタ,Haul
-base.sell,売る {0},Sell {0}
+base.title,ガラクタ・スロット台,Scrap Slot Machine
+base.status,地下 {0}/{1}階  残機 {2}  メダル {3},Floor B{0}/{1}  Lives {2}  Medals {3}
+base.haul,台に入れたガラクタ,Scrap in the machine
 base.to_reel,リールに入れる,Add to reel
 base.reel,リールの中身（{0}個）,Reel ({0})
 base.remove,廃棄 {0},Discard {0}
@@ -120,14 +131,20 @@ base.last_spin,前回の結果：+{0}  ライン{1}本  盤面×{2},Last spin: +
 base.relics,レリック（{0}/{1}）,Relics ({0}/{1})
 base.black_market,闇市,Black Market
 base.buy,買う {0},Buy {0}
-base.next_dive,次の潜行へ,Next dive
-base.payday,返済日：{0} を支払う,Payday: pay {0}
-base.paid,返済完了。次のサイクルへ。,Paid. On to the next cycle.
-base.cleared,完済！以降はエンドレス。,Debt cleared! Endless mode from here.
-base.failed,ノルマ未達。ラン終了。,Quota missed. Run over.
+base.cleared,最下層まで攻略した！,You reached the bottom!
 base.new_run,新しいラン,New run
-base.enemy_bonus,次の潜行で敵 +{0},Next dive enemies +{0}
-base.tool_shop,道具屋,Tool Shop
-base.owned,購入済み,Owned
+base.enemy_bonus,次の階層で敵 +{0},Next floor enemies +{0}
 base.tool_count,{0}/{1}個,{0}/{1}
-base.downed,倒れた。持っていたガラクタ{0}個を失った。,You went down. Lost {0} scrap you were carrying.
+base.downed_over,倒れた。持っていたガラクタ{0}個を失った。残機がなくなった。,You went down and lost {0} scrap. No lives left.
+base.to_medals,メダルに換える {0},Convert to {0} medals
+base.last_rewards,出た物,You got
+base.inventory,持ち物,Inventory
+base.reward_medals,メダル {0},{0} medals
+base.reward_tool,{0} ×{1},{0} ×{1}
+base.retry_floor,地下{0}階をやり直す,Retry floor B{0}
+base.next_floor,エレベーターで地下{0}階へ,Take the elevator to B{0}
+base.finish_run,エレベーターで脱出する,Take the elevator out
+base.objective_pending,攻略条件を満たすとエレベーターが動く,The elevator runs once the objective is done
+base.next_floor_message,地下{0}階に着いた。,Arrived at floor B{0}.
+base.objective_done,攻略条件を満たした！エレベーターが動く。,Objective complete! The elevator is running.
+base.downed,倒れた。持っていたガラクタ{0}個を失った。残機 {1}。,You went down. Lost {0} scrap you were carrying. {1} lives left.

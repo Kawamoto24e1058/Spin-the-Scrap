@@ -124,7 +124,7 @@ namespace SpinTheScrap.Tests
         public void RustyScaleRaisesSellPrice()
         {
             // 闇市の品ぞろえは seed で決まるので、錆びた秤が並ぶ seed を探して買う
-            var config = new BalanceConfig { StartingMoney = 100 };
+            var config = new BalanceConfig { StartingMedals = 100 };
             RunState run = null;
             for (ulong seed = 1; seed <= 200 && run == null; seed++)
             {
@@ -132,10 +132,10 @@ namespace SpinTheScrap.Tests
                 if (candidate.RelicOffers.Contains("rusty_scale")) run = candidate;
             }
             Assert.IsNotNull(run, "200 通りの seed のどれかで並ぶはず");
-            double before = run.SellPriceFor("safe_door");
+            double before = run.MedalValueFor("safe_door");
             Assert.IsTrue(run.TryBuyRelic("rusty_scale"));
-            Assert.AreEqual(System.Math.Floor(Db.GetSymbol("safe_door").SellPrice * 1.25), run.SellPriceFor("safe_door"));
-            Assert.Greater(run.SellPriceFor("safe_door"), before);
+            Assert.AreEqual(System.Math.Floor(Db.GetSymbol("safe_door").SellPrice * 1.25), run.MedalValueFor("safe_door"));
+            Assert.Greater(run.MedalValueFor("safe_door"), before);
         }
     }
 }

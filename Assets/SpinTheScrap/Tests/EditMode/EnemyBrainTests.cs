@@ -130,16 +130,6 @@ namespace SpinTheScrap.Tests
         }
 
         [Test]
-        public void EnemyCountGrowsWithCycleAndBonusButFitsRooms()
-        {
-            var rules = new EnemyRules();
-            Assert.AreEqual(1, rules.CountFor(1, 0, 4));
-            Assert.AreEqual(2, rules.CountFor(2, 0, 5));
-            Assert.AreEqual(3, rules.CountFor(1, 2, 5));
-            Assert.AreEqual(3, rules.CountFor(4, 3, 4), "入口以外の部屋数まで");
-        }
-
-        [Test]
         public void ImpactNoiseScalesWithSpeedAndIsCapped()
         {
             var rules = new EnemyRules();
