@@ -28,8 +28,12 @@ namespace SpinTheScrap.Interaction
         [SerializeField] float heldAngularDamping = 6f;
 
         [Header("Throw")]
-        [Tooltip("1kg の物を投げたときの初速 (m/s)。重いほど √質量 に反比例して遅くなる")]
-        [SerializeField] float throwSpeed = 9f;
+        [Tooltip("右クリックを軽く押しただけのときの、1kg の物の初速 (m/s)。重いほど √質量 に反比例して遅くなる")]
+        [SerializeField] float minThrowSpeed = 3f;
+        [Tooltip("最後までためたときの、1kg の物の初速 (m/s)")]
+        [SerializeField] float maxThrowSpeed = 12f;
+        [Tooltip("押し始めてから最大までたまる時間 (s)")]
+        [SerializeField] float throwChargeTime = 0.8f;
         [Tooltip("1 人で抱えたときの重さとして数える、特大の質量の割合")]
         [SerializeField, Range(0, 1)] float hugeLoadShare = 0.5f;
 
@@ -40,11 +44,16 @@ namespace SpinTheScrap.Interaction
         float heldOriginalAngularDamping;
         Collider[] heldColliders;
         Vector3 hoverPoint;
+        float chargeStartTime = -1f;
 
         public Scrap Hovered { get; private set; }
         public Scrap Held => held;
         public Inventory Inventory => inventory;
         public bool InventoryFullFeedback { get; private set; }
+        /// <summary>右クリックを押したまま投げる力をためている。</summary>
+        public bool IsChargingThrow => chargeStartTime >= 0f;
+        /// <summary>ためた力（0〜1）。</summary>
+        public float ThrowCharge => IsChargingThrow ? Mathf.Clamp01((Time.time - chargeStartTime) / throwChargeTime) : 0f;
 
         Camera Cam => controller.ViewCamera;
 
@@ -67,6 +76,7 @@ namespace SpinTheScrap.Interaction
             else
             {
                 Hovered = null;
+                chargeStartTime = -1f; // メニューを開いたらためを取り消す
             }
 
             controller.LoadKg = CurrentLoadKg();
@@ -104,17 +114,36 @@ namespace SpinTheScrap.Interaction
                 else if (Hovered != null) PickUp(Hovered, hoverPoint);
             }
 
-            if (GameInput.ThrowPressed)
-            {
-                if (held != null) Throw();
-                else if (inventory.Selected != null) ThrowFromInventory();
-            }
+            HandleThrowInput();
 
             if (GameInput.DropPressed)
             {
                 if (held != null) Release();
                 else if (inventory.Selected != null) PlaceInFront(inventory.TakeSelected());
             }
+        }
+
+        /// <summary>右クリックを押すとため始め、離すと投げる。特大は投げられないので押した時点で手を離す。</summary>
+        void HandleThrowInput()
+        {
+            if (GameInput.ThrowPressed)
+            {
+                if (held != null && held.Size == ScrapSize.Huge) Release();
+                else if (held != null || inventory.Selected != null) chargeStartTime = Time.time;
+            }
+
+            if (!IsChargingThrow) return;
+            if (held == null && inventory.Selected == null)
+            {
+                chargeStartTime = -1f; // ためている間に手から離れた
+                return;
+            }
+            if (GameInput.ThrowHeld) return;
+
+            float charge = ThrowCharge;
+            chargeStartTime = -1f;
+            if (held != null) Throw(charge);
+            else ThrowFromInventory(charge);
         }
 
         void PickUp(Scrap scrap, Vector3 point)
@@ -154,24 +183,23 @@ namespace SpinTheScrap.Interaction
             heldColliders = null;
         }
 
-        void Throw()
+        void Throw(float charge)
         {
             var scrap = held;
             Release();
-            if (scrap.Size == ScrapSize.Huge) return; // 特大は投げられない。手を離すだけ
-            Launch(scrap.Body);
+            Launch(scrap.Body, charge);
         }
 
-        void ThrowFromInventory()
+        void ThrowFromInventory(float charge)
         {
             var scrap = inventory.TakeSelected();
             PlaceInFront(scrap);
-            Launch(scrap.Body);
+            Launch(scrap.Body, charge);
         }
 
-        void Launch(Rigidbody body)
+        void Launch(Rigidbody body, float charge)
         {
-            float speed = throwSpeed / Mathf.Sqrt(Mathf.Max(1f, body.mass));
+            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, charge) / Mathf.Sqrt(Mathf.Max(1f, body.mass));
             var dir = (Cam.transform.forward + Vector3.up * 0.1f).normalized;
             body.linearVelocity = dir * speed;
         }

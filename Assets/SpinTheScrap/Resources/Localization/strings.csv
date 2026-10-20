@@ -50,7 +50,8 @@ size.Huge,特大,Huge
 hud.pickup,[E] 拾う,[E] Pick up
 hud.grab,[E] 抱える,[E] Carry
 hud.grab_huge,[E] 端をつかむ,[E] Grab an end
-hud.holding,[E/G] 離す  [右クリック] 投げる,[E/G] Release  [RMB] Throw
+hud.holding,[E/G] 離す  [右クリック長押し] ためて投げる,[E/G] Release  [Hold RMB] Charge and throw
+hud.holding_huge,[E/G/右クリック] 離す,[E/G/RMB] Release
 hud.inventory_full,インベントリがいっぱい,Inventory full
 hud.value,売値 {0},Sell {0}
 hud.integrity,状態 {0}%,Condition {0}%

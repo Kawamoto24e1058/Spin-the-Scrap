@@ -54,12 +54,17 @@ namespace SpinTheScrap.UI
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
 
-            // 照準の下：見ている物・持っている物
+            // 照準の下：投げる力のゲージ、見ている物・持っている物
             float y = Screen.height / 2f + 24;
+            if (interactor.IsChargingThrow)
+            {
+                DrawChargeBar(new Rect(Screen.width / 2f - 60, y - 8, 120, 6), interactor.ThrowCharge);
+                y += 6;
+            }
             if (interactor.Held != null)
             {
                 DescribeScrap(interactor.Held, ref y);
-                Line(s.Get("hud.holding"), ref y);
+                Line(s.Get(interactor.Held.Size == ScrapSize.Huge ? "hud.holding_huge" : "hud.holding"), ref y);
             }
             else if (interactor.Hovered != null)
             {
@@ -87,6 +92,16 @@ namespace SpinTheScrap.UI
             }
 
             ShadowLabel(new Rect(16, Screen.height - 28, Screen.width - 32, 24), s.Get("hud.controls"), label);
+        }
+
+        static void DrawChargeBar(Rect rect, float charge)
+        {
+            var prev = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = Color.Lerp(new Color(1f, 0.9f, 0.4f), new Color(1f, 0.4f, 0.2f), charge);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width * charge, rect.height), Texture2D.whiteTexture);
+            GUI.color = prev;
         }
 
         void DescribeScrap(Scrap scrap, ref float y)

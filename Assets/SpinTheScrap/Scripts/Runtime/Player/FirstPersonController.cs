@@ -83,9 +83,12 @@ namespace SpinTheScrap.Player
                     verticalVelocity = Mathf.Sqrt(2f * height * -gravity);
                 }
             }
+            // 前後の速度の平均で動かすと、フレームレートが変わってもジャンプの高さが変わらない
+            float previousVertical = verticalVelocity;
             verticalVelocity += gravity * Time.deltaTime;
+            float vertical = (previousVertical + verticalVelocity) * 0.5f;
 
-            controller.Move((horizontal + Vector3.up * verticalVelocity) * Time.deltaTime);
+            controller.Move((horizontal + Vector3.up * vertical) * Time.deltaTime);
         }
 
         /// <summary>歩いてぶつかった小物を軽く押す。重い物はほとんど動かない。</summary>
