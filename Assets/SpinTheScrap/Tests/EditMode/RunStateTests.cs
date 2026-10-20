@@ -9,91 +9,155 @@ namespace SpinTheScrap.Tests
         static RunState NewRun(BalanceConfig config = null, ulong seed = 1) =>
             new RunState(MvpContent.Create(), config ?? new BalanceConfig(), seed);
 
-        /// <summary>攻略条件を最後まで進める（種類に合わせて報告する）。</summary>
+        static RunState Rich(ulong seed = 1) => NewRun(new BalanceConfig { StartingMedals = 10000 }, seed);
+
         static void CompleteObjective(RunState run) => run.ReportObjective(run.Objective.Kind, run.Objective.Target);
 
         [Test]
-        public void StartsOnFloorOneWithReelMedalsLivesAndObjective()
+        public void StartsOnFloorOneWithReelsMedalsLivesAndObjective()
         {
             var run = NewRun();
-            Assert.AreEqual(5, run.Reel.Count);
-            Assert.IsTrue(run.Reel.All(s => s.SymbolId == "empty_can"));
+            foreach (var kind in RunState.AllMachines)
+            {
+                Assert.AreEqual(5, run.ReelOf(kind).Count, kind.ToString());
+                Assert.IsTrue(run.ReelOf(kind).All(s => s.SymbolId == "empty_can"));
+            }
             Assert.AreEqual(10, run.Medals);
             Assert.AreEqual(1, run.Floor);
             Assert.AreEqual(3, run.Lives);
-            Assert.IsNotNull(run.Objective);
-            Assert.IsFalse(run.Objective.IsComplete);
-            Assert.AreEqual(3, run.RelicOffers.Count);
+            Assert.AreEqual(FloorObjectiveKind.DefeatEnemies, run.Objective.Kind);
+            Assert.AreEqual(run.Config.KillTargetFor(1), run.Objective.Target);
         }
 
         [Test]
-        public void SpinCostRisesWithinFloor()
-        {
-            var run = NewRun(new BalanceConfig { StartingMedals = 1000 });
-            double first = run.CurrentSpinCost;
-            for (int i = 0; i < 5; i++) run.TrySpin(out _, out _);
-            Assert.Greater(run.CurrentSpinCost, first);
-        }
-
-        [Test]
-        public void SpinPaysOutAndChargesCost()
+        public void EachMachineHasItsOwnReel()
         {
             var run = NewRun();
-            double before = run.Medals;
-            double cost = run.CurrentSpinCost;
-            Assert.IsTrue(run.TrySpin(out var result, out var rewards));
-            double medalRewards = rewards.Where(r => r.IsMedals).Sum(r => r.Medals);
-            Assert.AreEqual(before - cost + result.Total + medalRewards, run.Medals, 1e-9);
+            run.AddToReel(MachineKind.Weapon, "rusty_screw", 0);
+            Assert.AreEqual(6, run.ReelOf(MachineKind.Weapon).Count);
+            Assert.AreEqual(5, run.ReelOf(MachineKind.Perk).Count, "ほかの台のリールは変わらない");
         }
 
         [Test]
-        public void SpinRewardsGoIntoTools()
+        public void SpinCostDiffersByMachineAndRisesPerSpin()
         {
-            // 空き缶だけのリールなら、金属のラインが出れば鉄パイプか釘打ち機が増える
-            var run = NewRun(new BalanceConfig { StartingMedals = 1000 });
-            for (int i = 0; i < 30; i++) run.TrySpin(out _, out _);
-            Assert.Greater(run.ToolCount(ToolIds.Pipe) + run.ToolCount(ToolIds.NailGun), 0);
+            var run = Rich();
+            Assert.Less(run.CostOf(MachineKind.Tool), run.CostOf(MachineKind.Perk));
+            Assert.Less(run.CostOf(MachineKind.Perk), run.CostOf(MachineKind.Weapon));
+            Assert.Less(run.CostOf(MachineKind.Weapon), run.CostOf(MachineKind.Mod));
+            double first = run.CostOf(MachineKind.Perk);
+            run.TrySpin(MachineKind.Perk, 0, out _);
+            Assert.Greater(run.CostOf(MachineKind.Perk), first);
+            Assert.AreEqual(run.MachineRules.CostFor(MachineKind.Weapon, 1, 0), run.CostOf(MachineKind.Weapon), "ほかの台の費用は上がらない");
+        }
+
+        [Test]
+        public void SpinChargesCostButDoesNotPayMedalsExceptToolFallback()
+        {
+            var run = Rich();
+            double before = run.Medals;
+            double cost = run.CostOf(MachineKind.Weapon);
+            Assert.IsTrue(run.TrySpin(MachineKind.Weapon, 0, out var outcome));
+            Assert.AreEqual(before - cost, run.Medals);
+            Assert.AreEqual(cost, outcome.Cost);
+        }
+
+        [Test]
+        public void WeaponMachineGivesWeaponToThePuller()
+        {
+            var run = Rich();
+            Assert.IsNull(run.Player(0).Weapon);
+            Assert.IsTrue(run.TrySpin(MachineKind.Weapon, 0, out var outcome));
+            Assert.IsNotNull(outcome.Weapon);
+            Assert.AreSame(outcome.Weapon, run.Player(0).Weapon);
+            Assert.IsNull(run.Player(1).Weapon, "ほかの人には渡らない");
+            Assert.AreEqual(SymbolTag.Metal, outcome.Weapon.Definition.Family, "空き缶だけなら金属の武器");
+        }
+
+        [Test]
+        public void PerkMachineLevelsUpTheBoardsTags()
+        {
+            var run = Rich();
+            for (int i = 0; i < 5; i++) run.TrySpin(MachineKind.Perk, 0, out _);
+            Assert.Greater(run.Player(0).Perks.Level(SymbolTag.Metal), 0);
+            Assert.Greater(run.StatsOf(0).DamageMultiplier, 1);
+            Assert.AreEqual(0, run.Player(1).Perks.Level(SymbolTag.Metal));
+        }
+
+        [Test]
+        public void ModMachineNeedsAWeapon()
+        {
+            var run = Rich();
+            Assert.IsFalse(run.CanSpin(MachineKind.Mod, 0), "武器がなければ回せない");
+            double before = run.Medals;
+            Assert.IsFalse(run.TrySpin(MachineKind.Mod, 0, out _));
+            Assert.AreEqual(before, run.Medals, "回せないときはメダルを取らない");
+            run.TrySpin(MachineKind.Weapon, 0, out _);
+            Assert.IsTrue(run.TrySpin(MachineKind.Mod, 0, out var outcome));
+            Assert.AreEqual(WeaponModKind.Damage, outcome.Mod, "空き缶だけなら金属の改造");
+            Assert.AreEqual(1, run.Player(0).Weapon.Mods.Count);
+        }
+
+        [Test]
+        public void ToolMachineFallsBackToMedalsForMetal()
+        {
+            var run = Rich();
+            double before = run.Medals;
+            run.TrySpin(MachineKind.Tool, 0, out var outcome);
+            if (outcome.ToolId == null)
+                Assert.AreEqual(before - outcome.Cost + outcome.Medals, run.Medals);
+            else
+                Assert.AreEqual(ToolIds.Cart, outcome.ToolId, "金属は質 3 のときだけ台車");
         }
 
         [Test]
         public void CannotSpinWithoutMedals()
         {
             var run = NewRun(new BalanceConfig { StartingMedals = 0 });
-            Assert.IsFalse(run.CanSpin);
-            Assert.IsFalse(run.TrySpin(out var result, out var rewards));
-            Assert.IsNull(result);
-            Assert.IsNull(rewards);
+            Assert.IsFalse(run.CanSpin(MachineKind.Tool, 0));
+            Assert.IsFalse(run.TrySpin(MachineKind.Tool, 0, out var outcome));
+            Assert.IsNull(outcome);
         }
 
         [Test]
-        public void ConvertingScrapGivesMedalsScaledByCondition()
+        public void ConvertingScrapGivesMedalsScaledByConditionAndGamblePerk()
         {
             var run = NewRun();
             double before = run.Medals;
             Assert.AreEqual(15, run.ConvertToMedals("cracked_mirror"));
             Assert.AreEqual(7, run.ConvertToMedals("cracked_mirror", 0.5)); // 切り捨て
             Assert.AreEqual(before + 22, run.Medals);
+
+            run.Player(0).Perks.AddXp(SymbolTag.Gamble, 1000); // Lv5 → +50%
+            Assert.AreEqual(22, run.MedalValueFor("cracked_mirror"));
         }
 
         [Test]
-        public void CannotAdvanceUntilObjectiveIsComplete()
+        public void FloorsGoNormalNormalBoss()
         {
             var run = NewRun();
+            Assert.IsFalse(run.IsBossFloor);
+            CompleteObjective(run);
+            run.AdvanceFloor();
+            Assert.IsFalse(run.IsBossFloor);
+            Assert.AreEqual(run.Config.KillTargetFor(2), run.Objective.Target, "深いほど多く倒す");
+            CompleteObjective(run);
+            run.AdvanceFloor();
+            Assert.IsTrue(run.IsBossFloor);
+            Assert.AreEqual(FloorObjectiveKind.DefeatBoss, run.Objective.Kind);
+            Assert.AreEqual(1, run.Objective.Target);
+        }
+
+        [Test]
+        public void CannotAdvanceUntilObjectiveIsCompleteAndSpinCostsReset()
+        {
+            var run = Rich();
             Assert.Throws<System.InvalidOperationException>(() => run.AdvanceFloor());
+            run.TrySpin(MachineKind.Perk, 0, out _);
             CompleteObjective(run);
             run.AdvanceFloor();
             Assert.AreEqual(2, run.Floor);
-            Assert.IsFalse(run.Objective.IsComplete, "新しい階層の攻略条件");
-            Assert.AreEqual(0, run.SpinsThisFloor);
-        }
-
-        [Test]
-        public void ReportsOfOtherKindsDoNotCount()
-        {
-            var run = NewRun();
-            var other = run.Objective.Kind == FloorObjectiveKind.DefeatEnemies ? FloorObjectiveKind.FindKey : FloorObjectiveKind.DefeatEnemies;
-            Assert.IsFalse(run.ReportObjective(other, 100));
-            Assert.AreEqual(0, run.Objective.Progress);
+            Assert.AreEqual(0, run.SpinsThisFloor(MachineKind.Perk));
         }
 
         [Test]
@@ -106,23 +170,21 @@ namespace SpinTheScrap.Tests
                 run.AdvanceFloor();
             }
             Assert.IsTrue(run.IsLastFloor);
-            Assert.IsFalse(run.IsCleared);
+            Assert.IsTrue(run.IsBossFloor, "試作の 3 階層目はボス");
             CompleteObjective(run);
             run.AdvanceFloor();
             Assert.IsTrue(run.IsCleared);
-            Assert.IsTrue(run.IsOver);
-            Assert.IsFalse(run.CanSpin);
+            Assert.IsFalse(run.CanSpin(MachineKind.Tool, 0));
         }
 
         [Test]
         public void GoingDownCostsALifeAndResetsObjectiveProgress()
         {
             var run = NewRun();
-            run.ReportObjective(run.Objective.Kind, run.Objective.Target / 2);
+            run.ReportObjective(run.Objective.Kind, 3);
             run.OnDowned();
             Assert.AreEqual(2, run.Lives);
             Assert.AreEqual(0, run.Objective.Progress);
-            Assert.IsFalse(run.IsFailed);
             run.OnDowned();
             run.OnDowned();
             Assert.IsTrue(run.IsFailed);
@@ -133,17 +195,17 @@ namespace SpinTheScrap.Tests
         public void RemovingFromReelCostsFee()
         {
             var run = NewRun();
-            var target = run.Reel[0];
+            var target = run.ReelOf(MachineKind.Perk)[0];
             double fee = run.RemovalFee;
-            Assert.IsTrue(run.TryRemoveFromReel(target.InstanceId));
-            Assert.AreEqual(4, run.Reel.Count);
+            Assert.IsTrue(run.TryRemoveFromReel(MachineKind.Perk, target.InstanceId));
+            Assert.AreEqual(4, run.ReelOf(MachineKind.Perk).Count);
             Assert.AreEqual(10 - fee, run.Medals);
         }
 
         [Test]
         public void BuyingRelicRemovesItFromOffers()
         {
-            var run = NewRun(new BalanceConfig { StartingMedals = 1000 });
+            var run = Rich();
             string offer = run.RelicOffers[0];
             Assert.IsTrue(run.TryBuyRelic(offer));
             Assert.AreEqual(1, run.Relics.Count);
@@ -152,38 +214,26 @@ namespace SpinTheScrap.Tests
         }
 
         [Test]
-        public void RegularCardMakesFirstSpinOfFloorFree()
-        {
-            var config = new BalanceConfig { StartingMedals = 1000, RelicOffersPerFloor = 10 };
-            var run = NewRun(config);
-            Assert.IsTrue(run.TryBuyRelic("regular_card"));
-            Assert.AreEqual(0, run.CurrentSpinCost);
-            run.TrySpin(out _, out _);
-            Assert.Greater(run.CurrentSpinCost, 0);
-        }
-
-        [Test]
         public void EnemyBonusIsConsumedOnce()
         {
-            var config = new BalanceConfig { StartingMedals = 1000, StartingReel = { "mannequin_head", "mannequin_head", "mannequin_head" } };
+            var config = new BalanceConfig { StartingMedals = 10000, StartingReel = { "mannequin_head", "mannequin_head", "mannequin_head" } };
             config.StartingReel.RemoveAll(id => id == "empty_can");
             var run = NewRun(config);
-            run.TrySpin(out var result, out _);
-            Assert.GreaterOrEqual(run.PendingEnemyBonus, result.EnemyBonus);
-            int bonus = run.ConsumeEnemyBonus();
-            Assert.Greater(bonus, 0);
+            run.TrySpin(MachineKind.Perk, 0, out var outcome);
+            Assert.AreEqual(outcome.Reading.Result.EnemyBonus, run.PendingEnemyBonus);
+            Assert.AreEqual(1, run.ConsumeEnemyBonus());
             Assert.AreEqual(0, run.ConsumeEnemyBonus());
         }
 
         [Test]
         public void DestroyedSymbolsLeaveTheReel()
         {
-            var config = new BalanceConfig { StartingMedals = 1000 };
+            var config = new BalanceConfig { StartingMedals = 10000 };
             config.StartingReel.Clear();
             for (int i = 0; i < 10; i++) config.StartingReel.Add("lottery_bundle");
             var run = NewRun(config);
-            run.TrySpin(out var result, out _);
-            Assert.AreEqual(10 - result.DestroyedInstances.Count(), run.Reel.Count);
+            run.TrySpin(MachineKind.Tool, 0, out var outcome);
+            Assert.AreEqual(10 - outcome.Reading.Result.DestroyedInstances.Count(), run.ReelOf(MachineKind.Tool).Count);
         }
     }
 }

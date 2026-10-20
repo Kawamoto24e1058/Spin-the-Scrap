@@ -10,9 +10,7 @@ namespace SpinTheScrap.UI
         {
             var s = session.Strings;
             var objective = session.Run.Objective;
-            string progress = objective.Kind == FloorObjectiveKind.PowerGenerator
-                ? session.Medals(objective.Progress) + "/" + session.Medals(objective.Target)
-                : (int)objective.Progress + "/" + (int)objective.Target;
+            string progress = (int)objective.Progress + "/" + (int)objective.Target;
             string text = s.Format("objective.label", s.Get(objective.NameKey), progress);
             return objective.IsComplete ? text + "  " + s.Get("objective.done") : text;
         }

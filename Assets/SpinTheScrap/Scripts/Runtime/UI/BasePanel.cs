@@ -8,8 +8,9 @@ using UnityEngine;
 namespace SpinTheScrap.UI
 {
     /// <summary>
-    /// スロット台のメニュー（IMGUI の仮 UI）。台に入れたガラクタを「リールに入れる」か「メダルに換える」か選び、
-    /// 回して道具を出し、レリックの購入・シンボルの廃棄、次の階層への移動をまとめて操作する（docs/floor-design.md）。
+    /// スロット台のメニュー（IMGUI の仮 UI。docs/floor-design.md）。台の種類（武器・強化・改造・道具）を切り替え、
+    /// 台に入れたガラクタを「換金する」か「この台のリールに入れる」か選び、回して強くなる。
+    /// 攻略条件を満たしたら次の階層へ、倒れたら階層をやり直す。
     /// </summary>
     public sealed class BasePanel : MonoBehaviour
     {
@@ -36,6 +37,8 @@ namespace SpinTheScrap.UI
         public bool Visible { get; set; }
         /// <summary>倒れて開いた（閉じられず、「やり直す」だけが押せる）。Phase0Bootstrap が設定する。</summary>
         public bool OnDownedScreen { get; set; }
+        /// <summary>今操作している台の種類。台に近づいて開いたときにその種類になる。</summary>
+        public MachineKind Machine { get; set; } = MachineKind.Weapon;
 
         public void Init(RunSession runSession) => session = runSession;
 
@@ -57,15 +60,15 @@ namespace SpinTheScrap.UI
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(new Rect(area.x + 10, area.y + 10, area.width - 20, area.height - 20));
 
-            GUILayout.Label(s.Get("base.title"));
-            GUILayout.Label(s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals)));
-            GUILayout.Label(ObjectiveText.Describe(session));
+            GUILayout.Label(s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals))
+                            + "    " + ObjectiveText.Describe(session));
             if (run.PendingEnemyBonus > 0) GUILayout.Label(s.Format("base.enemy_bonus", run.PendingEnemyBonus));
             if (!string.IsNullOrEmpty(session.Message)) GUILayout.Label(session.Message);
+            DrawMachineTabs();
 
             GUILayout.BeginHorizontal();
             float columnWidth = (area.width - 40) / 2f;
-            labelWidth = columnWidth * 0.5f;
+            labelWidth = columnWidth * 0.45f;
             cellWidth = Mathf.Min(96f, (columnWidth - 40f) / Board.Columns);
 
             GUILayout.BeginVertical(GUILayout.Width(columnWidth));
@@ -84,12 +87,27 @@ namespace SpinTheScrap.UI
             GUILayout.Space(16);
             DrawFlow();
             GUILayout.Space(16);
-            DrawTools();
+            DrawLoadout();
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
+
+        void DrawMachineTabs()
+        {
+            var s = session.Strings;
+            GUILayout.BeginHorizontal();
+            foreach (var kind in RunState.AllMachines)
+            {
+                var prev = GUI.color;
+                if (kind == Machine) GUI.color = new Color(1f, 0.9f, 0.4f);
+                if (GUILayout.Button(s.Get("machine." + kind), GUILayout.Height(28))) Machine = kind;
+                GUI.color = prev;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Label(s.Get("machine." + Machine + ".desc"));
         }
 
         void DrawHaul()
@@ -100,10 +118,12 @@ namespace SpinTheScrap.UI
             {
                 GUILayout.BeginHorizontal();
                 string condition = item.ValueFactor < 1 ? " (" + Mathf.RoundToInt((float)item.ValueFactor * 100) + "%)" : "";
-                GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(labelWidth * 0.6f));
-                if (GUILayout.Button(s.Format("base.to_medals", session.Medals(session.MedalValueOf(item))))) pending = () => { session.ConvertToMedals(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
+                GUILayout.Label(session.SymbolName(item.SymbolId) + condition, GUILayout.Width(labelWidth * 0.7f));
+                if (GUILayout.Button(s.Format("base.to_medals", session.Medals(session.MedalValueOf(item)))))
+                    pending = () => { session.ConvertToMedals(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
                 GUI.enabled = session.CanAddToReel(item);
-                if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => { session.AddToReel(item); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
+                var kind = Machine;
+                if (GUILayout.Button(s.Get("base.to_reel"))) pending = () => { session.AddToReel(item, kind); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -113,16 +133,18 @@ namespace SpinTheScrap.UI
         {
             var s = session.Strings;
             var run = session.Run;
-            GUILayout.Label("■ " + s.Format("base.reel", run.Reel.Count));
+            var reel = run.ReelOf(Machine);
+            GUILayout.Label("■ " + s.Format("base.reel", reel.Count));
             // 同じシンボルはまとめて表示し、廃棄は 1 個ずつ（最後に入れた物から）
-            foreach (var group in run.Reel.GroupBy(r => r.SymbolId).ToList())
+            foreach (var group in reel.GroupBy(r => r.SymbolId).ToList())
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(session.SymbolName(group.Key) + " ×" + group.Count(), GUILayout.Width(labelWidth));
                 GUI.enabled = run.Medals >= run.RemovalFee;
                 int instanceId = group.Last().InstanceId;
+                var kind = Machine;
                 if (GUILayout.Button(s.Format("base.remove", session.Medals(run.RemovalFee))))
-                    pending = () => run.TryRemoveFromReel(instanceId);
+                    pending = () => run.TryRemoveFromReel(kind, instanceId);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -135,62 +157,38 @@ namespace SpinTheScrap.UI
             GUILayout.Label("■ " + s.Format("base.relics", run.Relics.Count, run.Config.MaxRelics));
             foreach (var relic in run.Relics)
                 GUILayout.Label("・" + s.Get(relic.NameKey) + "：" + s.Get(relic.DescriptionKey));
-
-            GUILayout.Label("■ " + s.Get("base.black_market"));
             foreach (var id in run.RelicOffers.ToList())
             {
                 var def = session.Content.GetRelic(id);
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(labelWidth));
                 GUI.enabled = run.Medals >= def.Price && run.Relics.Count < run.Config.MaxRelics;
-                if (GUILayout.Button(s.Format("base.buy", session.Medals(def.Price)))) pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
+                if (GUILayout.Button(s.Format("base.buy", session.Medals(def.Price))))
+                    pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
-        }
-
-        /// <summary>持ち物（スロットで出た道具・武器）と、直前のスピンで出た物。</summary>
-        void DrawTools()
-        {
-            var s = session.Strings;
-            var run = session.Run;
-            if (session.LastRewards != null && session.LastRewards.Count > 0)
-            {
-                GUILayout.Label("■ " + s.Get("base.last_rewards"));
-                foreach (var reward in session.LastRewards)
-                    GUILayout.Label("・" + RewardText(reward));
-                GUILayout.Space(8);
-            }
-            GUILayout.Label("■ " + s.Get("base.inventory"));
-            foreach (var tool in run.ToolCatalog.Tools)
-            {
-                int owned = run.ToolCount(tool.Id);
-                if (owned <= 0) continue;
-                string count = tool.Permanent ? "" : "  " + s.Format("base.tool_count", owned, tool.MaxCount);
-                GUILayout.Label(s.Get(tool.NameKey) + count + "：" + s.Get(tool.DescriptionKey));
-            }
-        }
-
-        string RewardText(SpinReward reward)
-        {
-            var s = session.Strings;
-            if (reward.IsMedals) return s.Format("base.reward_medals", session.Medals(reward.Medals));
-            var def = session.Run.ToolCatalog.Get(reward.ToolId);
-            return def.Permanent ? s.Get(def.NameKey) : s.Format("base.reward_tool", s.Get(def.NameKey), reward.Count);
         }
 
         void DrawSlot()
         {
             var s = session.Strings;
             var run = session.Run;
-            GUI.enabled = run.CanSpin;
-            if (GUILayout.Button(s.Format("base.spin", session.Medals(run.CurrentSpinCost)), GUILayout.Height(40))) pending = SpinWithSound;
+            int player = session.LocalPlayerId;
+            GUI.enabled = run.CanSpin(Machine, player);
+            if (GUILayout.Button(s.Format("base.spin", session.Medals(run.CostOf(Machine))), GUILayout.Height(40))) pending = SpinWithSound;
             GUI.enabled = true;
+            if (Machine == MachineKind.Mod && (run.Player(player).Weapon == null || !run.Player(player).Weapon.CanTakeMod))
+                GUILayout.Label(s.Get("base.mod_needs_weapon"));
 
-            var spin = session.LastSpin;
-            if (spin == null) return;
+            var outcome = session.LastOutcome;
+            if (outcome == null) return;
+            var spin = outcome.Reading.Result;
+            GUILayout.Label(s.Format("base.last_spin", s.Get("machine." + outcome.Kind), session.Medals(spin.Total), spin.Lines.Count,
+                outcome.Reading.Family == SymbolTag.None ? "-" : s.Get("tag." + outcome.Reading.Family), outcome.Reading.Tier));
+            if (outcome.Reading.Jackpot) GUILayout.Label(s.Get("base.jackpot"));
+            GUILayout.Label("→ " + OutcomeText(outcome));
 
-            GUILayout.Label(s.Format("base.last_spin", session.Medals(spin.Total), spin.Lines.Count, spin.BoardMultiplier));
             for (int row = 0; row < Board.Rows; row++)
             {
                 GUILayout.BeginHorizontal();
@@ -217,12 +215,64 @@ namespace SpinTheScrap.UI
             if (spin.CornerBonus > 0) GUILayout.Label("Corners  +" + session.Medals(spin.CornerBonus));
         }
 
+        string OutcomeText(MachineOutcome outcome)
+        {
+            var s = session.Strings;
+            switch (outcome.Kind)
+            {
+                case MachineKind.Weapon:
+                    return s.Format("outcome.weapon", s.Get(outcome.Weapon.Definition.NameKey));
+                case MachineKind.Mod:
+                    return outcome.Mod.HasValue ? s.Format("outcome.mod", s.Get("mod." + outcome.Mod.Value)) : s.Get("outcome.mod_full");
+                case MachineKind.Perk:
+                    var gains = outcome.Reading.TagTotals.Where(p => p.Value > 0).OrderByDescending(p => p.Value)
+                        .Select(p => s.Get("tag." + p.Key) + " +" + session.Medals(p.Value));
+                    string text = s.Format("outcome.perk", string.Join("  ", gains));
+                    if (outcome.LevelUps.Count > 0)
+                        text += "  " + s.Format("outcome.level_up", string.Join("・", outcome.LevelUps.Select(t => s.Get("tag." + t))));
+                    return text;
+                default:
+                    if (outcome.ToolId == null) return s.Format("outcome.medals", session.Medals(outcome.Medals));
+                    var def = session.Run.ToolCatalog.Get(outcome.ToolId);
+                    return s.Format("outcome.tool", s.Get(def.NameKey), outcome.ToolCount);
+            }
+        }
+
         void SpinWithSound()
         {
-            if (!session.Spin()) return;
+            if (!session.Spin(Machine)) return;
             Sfx.Play2D(SfxClips.Spin, 0.7f);
-            // 道具が出たらファンファーレ
-            if (session.LastRewards != null && session.LastRewards.Count > 0) Sfx.Play2D(SfxClips.Win, 0.6f);
+            var outcome = session.LastOutcome;
+            if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Sfx.Play2D(SfxClips.Win, 0.6f);
+        }
+
+        /// <summary>手に持っている武器、強化のレベル、道具。</summary>
+        void DrawLoadout()
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            var me = run.Player(session.LocalPlayerId);
+            GUILayout.Label("■ " + s.Get("base.loadout"));
+            if (me.Weapon != null)
+            {
+                string mods = me.Weapon.Mods.Count > 0 ? "  [" + string.Join("・", me.Weapon.Mods.Select(m => s.Get("mod." + m))) + "]" : "";
+                GUILayout.Label(s.Format("base.weapon", s.Get(me.Weapon.Definition.NameKey), me.Weapon.Remaining, me.Weapon.Capacity) + mods);
+            }
+            else GUILayout.Label(s.Get("base.no_weapon"));
+
+            var levels = System.Enum.GetValues(typeof(SymbolTag)).Cast<SymbolTag>()
+                .Where(t => t != SymbolTag.None && me.Perks.Level(t) > 0)
+                .Select(t => s.Get("tag." + t) + " Lv" + me.Perks.Level(t));
+            string perkText = string.Join("  ", levels);
+            if (!string.IsNullOrEmpty(perkText)) GUILayout.Label(s.Format("base.perks", perkText));
+
+            foreach (var tool in run.ToolCatalog.Tools)
+            {
+                int owned = run.ToolCount(tool.Id);
+                if (owned <= 0) continue;
+                string count = tool.Permanent ? "" : "  " + s.Format("base.tool_count", owned, tool.MaxCount);
+                GUILayout.Label("・" + s.Get(tool.NameKey) + count);
+            }
         }
 
         void DrawFlow()

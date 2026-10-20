@@ -81,21 +81,60 @@ tool.battery.name,電池,Battery
 tool.battery.desc,懐中電灯の電池が切れたら自動で交換する。,Swaps in automatically when the flashlight dies.
 tool.bandage.name,包帯,Bandage
 tool.bandage.desc,[H] 体力を40回復する。,[H] Restore 40 health.
-tool.pipe.name,鉄パイプ,Iron Pipe
-tool.pipe.desc,近づいて殴る。数は耐久。,Melee. The count is durability.
-tool.nail_gun.name,釘打ち機,Nail Gun
-tool.nail_gun.desc,離れた敵を撃つ。数は弾数。,Shoot enemies at range. The count is ammo.
-tool.taser.name,スタンガン,Taser
-tool.taser.desc,当てた敵をひるませる。数は使える回数。,Stuns what it hits. The count is charges.
 tool.firecracker.name,爆竹,Firecracker
 tool.firecracker.desc,[Q] 投げると少しして大きな音で鳴り、敵をおびき寄せる。,[Q] Throw it; it bangs loudly a moment later and lures enemies.
 # --- 攻略条件 ---
 objective.label,攻略条件：{0}（{1}）,Objective: {0} ({1})
 objective.done,達成,Done
-objective.FindKey,鍵を探してエレベーターへ,Find the key and bring it to the elevator
 objective.DefeatEnemies,敵を倒す,Defeat enemies
-objective.PowerGenerator,ガラクタで電力をためる,Charge power with scrap
-objective.HaulHuge,特大のガラクタをエレベーターへ,Haul the huge scrap to the elevator
+objective.DefeatBoss,ボスを倒す,Defeat the boss
+# --- スロット台 ---
+machine.Weapon,武器スロット,Weapon Slot
+machine.Weapon.desc,武器が出る。リールで多いタグの武器、盤面の合計が大きいほど良い武器。,Gives a weapon. The reel's strongest tag picks the type; a bigger board total gives a better one.
+machine.Perk,強化スロット,Perk Slot
+machine.Perk.desc,盤面のタグの値がそのまま経験値になり、能力のレベルが上がる。,Each tag's board value becomes XP for that perk.
+machine.Mod,改造スロット,Mod Slot
+machine.Mod.desc,手に持っている武器に改造が付く（1本に3つまで）。,Adds a mod to the weapon in hand (up to 3).
+machine.Tool,道具スロット,Tool Slot
+machine.Tool.desc,包帯・爆竹・電池などの消耗品が出る。,Gives consumables like bandages, firecrackers and batteries.
+outcome.weapon,{0} を手に入れた,Got {0}
+outcome.mod,改造「{0}」が付いた,Mod added: {0}
+outcome.mod_full,改造はもう付けられない,No room for another mod
+outcome.perk,経験値 {0},XP {0}
+outcome.level_up,レベルアップ：{0},Level up: {0}
+outcome.medals,メダル {0},{0} medals
+outcome.tool,{0} ×{1},{0} ×{1}
+# --- 改造 ---
+mod.Damage,攻撃力+30%,Damage +30%
+mod.Stun,ひるませる,Stun
+mod.Lifesteal,吸収,Lifesteal
+mod.FireRate,速射,Rapid
+mod.Capacity,大容量,Extended
+mod.Cursed,呪い,Cursed
+mod.Minor,攻撃力+15%,Damage +15%
+# --- 武器 ---
+weapon.pipe.name,鉄パイプ,Iron Pipe
+weapon.pipe.desc,近接。振れる回数に限りがある。,Melee. Limited swings.
+weapon.nail_gun.name,釘打ち機,Nail Gun
+weapon.nail_gun.desc,連射できる。,Rapid fire.
+weapon.rivet_cannon.name,リベット砲,Rivet Cannon
+weapon.rivet_cannon.desc,重い一撃が敵を貫通する。,Heavy shots that pierce.
+weapon.taser.name,スタンガン,Taser
+weapon.taser.desc,近接。当てた敵をよくひるませる。,Melee. Often stuns.
+weapon.arc_gun.name,放電銃,Arc Gun
+weapon.arc_gun.desc,電撃が近くの敵に連鎖する。,Lightning chains to nearby enemies.
+weapon.arc_gun_mk2.name,放電銃・改,Arc Gun Mk2
+weapon.arc_gun_mk2.desc,電撃がより多くの敵に連鎖する。,Lightning chains further.
+weapon.firework_tube.name,花火筒,Firework Tube
+weapon.firework_tube.desc,着弾点で爆発する。,Explodes on impact.
+weapon.firework_tube_mk2.name,打ち上げ花火筒,Mortar Firework
+weapon.firework_tube_mk2.desc,大きく爆発する。,Big explosions.
+weapon.cursed_cleaver.name,呪いの包丁,Cursed Cleaver
+weapon.cursed_cleaver.desc,近接で大ダメージ。当てるたびに少し傷つく。,Huge melee damage. Hurts you a little each hit.
+weapon.cursed_cleaver_mk2.name,血塗られた包丁,Bloodied Cleaver
+weapon.cursed_cleaver_mk2.desc,さらに強いが、さらに傷つく。,Stronger and hungrier.
+weapon.cursed_cleaver_mk3.name,妖刀もどき,Wicked Blade
+weapon.cursed_cleaver_mk3.desc,最強の一撃。代償も大きい。,The strongest cut, at a cost.
 # --- 運搬区分 ---
 size.Small,小,Small
 size.Large,大,Large
@@ -120,14 +159,11 @@ hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G]
 hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
 hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / H Bandage / Q Firecracker / Tab Base menu
 # --- 拠点メニュー ---
-base.title,ガラクタ・スロット台,Scrap Slot Machine
 base.status,地下 {0}/{1}階  残機 {2}  メダル {3},Floor B{0}/{1}  Lives {2}  Medals {3}
 base.haul,台に入れたガラクタ,Scrap in the machine
-base.to_reel,リールに入れる,Add to reel
 base.reel,リールの中身（{0}個）,Reel ({0})
 base.remove,廃棄 {0},Discard {0}
 base.spin,レバーを引く（{0}）,Pull the lever ({0})
-base.last_spin,前回の結果：+{0}  ライン{1}本  盤面×{2},Last spin: +{0}  {1} lines  Board ×{2}
 base.relics,レリック（{0}/{1}）,Relics ({0}/{1})
 base.black_market,闇市,Black Market
 base.buy,買う {0},Buy {0}
@@ -136,11 +172,15 @@ base.new_run,新しいラン,New run
 base.enemy_bonus,次の階層で敵 +{0},Next floor enemies +{0}
 base.tool_count,{0}/{1}個,{0}/{1}
 base.downed_over,倒れた。持っていたガラクタ{0}個を失った。残機がなくなった。,You went down and lost {0} scrap. No lives left.
-base.to_medals,メダルに換える {0},Convert to {0} medals
-base.last_rewards,出た物,You got
-base.inventory,持ち物,Inventory
-base.reward_medals,メダル {0},{0} medals
-base.reward_tool,{0} ×{1},{0} ×{1}
+base.to_reel,この台のリールに入れる,Add to this reel
+base.last_spin,{0}：合計 {1}  ライン{2}本  系統 {3}  質 {4},{0}: total {1}  {2} lines  type {3}  tier {4}
+base.jackpot,大当たり！全員に強化が入る。とても大きな音が鳴った。,Jackpot! Everyone gets perk XP. That was very loud.
+base.loadout,装備と強化,Loadout
+base.weapon,武器：{0}（{1}/{2}）,Weapon: {0} ({1}/{2})
+base.no_weapon,武器：素手,Weapon: bare hands
+base.perks,強化：{0},Perks: {0}
+base.mod_needs_weapon,改造するには武器が必要（改造は1本に3つまで）,You need a weapon to mod (up to 3 mods each)
+base.to_medals,換金 {0},Cash in {0}
 base.retry_floor,地下{0}階をやり直す,Retry floor B{0}
 base.next_floor,エレベーターで地下{0}階へ,Take the elevator to B{0}
 base.finish_run,エレベーターで脱出する,Take the elevator out

@@ -42,8 +42,10 @@ namespace SpinTheScrap.Session
         public ToolRules Tools { get; } = new ToolRules();
         public IReadOnlyList<HaulItem> Haul => haul;
         public SpinResult LastSpin { get; private set; }
-        /// <summary>直前のスピンで出た物。</summary>
-        public List<SpinReward> LastRewards { get; private set; }
+        /// <summary>直前に回した結果（台の種類・出た物）。</summary>
+        public MachineOutcome LastOutcome { get; private set; }
+        /// <summary>このマシンで遊んでいるプレイヤー（フェーズ 1 で 2 人目が入るまでは 0）。</summary>
+        public int LocalPlayerId { get; set; }
         /// <summary>直前の操作の結果メッセージ（倒れた・次の階層へ など）。</summary>
         public string Message { get; private set; }
 
@@ -65,15 +67,14 @@ namespace SpinTheScrap.Session
             Run = new RunState(Content, mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig(), runSeed);
             haul.Clear();
             LastSpin = null;
-            LastRewards = null;
+            LastOutcome = null;
             Message = null;
             FloorStarted?.Invoke(0);
         }
 
         /// <summary>
         /// スロット台の投入口の中のガラクタと、プレイヤーの持ち物をすべて台に入れる。
-        /// 入れた物は「リールに入れる」か「メダルに換える」かを拠点メニューで選ぶ。
-        /// 発電機の階層では、入れた物の価値が電力にもなる（発電機を置くまでの仮）。
+        /// 入れた物は「換金する」か「どの台のリールに入れるか」を台のメニューで選ぶ。
         /// </summary>
         public int Extract(ExtractionZone zone, Inventory inventory, bool playerInZone, int ownerId)
         {
@@ -83,10 +84,7 @@ namespace SpinTheScrap.Session
             double brokenRatio = Run.BrokenFragileValueRatio;
             foreach (var scrap in scraps)
             {
-                double factor = scrap.ValueFactor(brokenRatio);
-                haul.Add(new HaulItem { SymbolId = scrap.SymbolId, ValueFactor = factor, OwnerId = ownerId });
-                if (Run.ReportObjective(FloorObjectiveKind.PowerGenerator, Run.MedalValueFor(scrap.SymbolId, factor)))
-                    Message = Strings.Get("base.objective_done");
+                haul.Add(new HaulItem { SymbolId = scrap.SymbolId, ValueFactor = scrap.ValueFactor(brokenRatio), OwnerId = ownerId });
                 Destroy(scrap.gameObject);
             }
             return scraps.Count;
@@ -104,30 +102,35 @@ namespace SpinTheScrap.Session
                 : Strings.Format("base.downed", lostCount, Run.Lives);
         }
 
-        public double MedalValueOf(HaulItem item) => Run.MedalValueFor(item.SymbolId, item.ValueFactor);
+        public double MedalValueOf(HaulItem item) => Run.MedalValueFor(item.SymbolId, item.ValueFactor, LocalPlayerId);
 
         public void ConvertToMedals(HaulItem item)
         {
             if (!haul.Remove(item)) return;
-            Run.ConvertToMedals(item.SymbolId, item.ValueFactor);
+            Run.ConvertToMedals(item.SymbolId, item.ValueFactor, LocalPlayerId);
         }
 
         /// <summary>割れて価値のない物はリールに入れられない。</summary>
         public bool CanAddToReel(HaulItem item) => item.ValueFactor > 0;
 
-        public void AddToReel(HaulItem item)
+        public void AddToReel(HaulItem item, MachineKind kind)
         {
             if (!CanAddToReel(item) || !haul.Remove(item)) return;
-            Run.AddToReel(item.SymbolId, item.OwnerId);
+            Run.AddToReel(kind, item.SymbolId, item.OwnerId);
         }
 
-        public bool Spin()
+        /// <summary>台を回す。出た物はレバーを引いたプレイヤー（LocalPlayerId）に入る。</summary>
+        public bool Spin(MachineKind kind)
         {
-            if (!Run.TrySpin(out var result, out var rewards)) return false;
-            LastSpin = result;
-            LastRewards = rewards;
+            if (!Run.TrySpin(kind, LocalPlayerId, out var outcome)) return false;
+            LastSpin = outcome.Reading.Result;
+            LastOutcome = outcome;
+            Spun?.Invoke(outcome);
             return true;
         }
+
+        /// <summary>台を回した（音を鳴らす・武器を持ち替えるなど、世界の側の処理用）。</summary>
+        public event Action<MachineOutcome> Spun;
 
         /// <summary>攻略条件を満たしていれば次の階層へ（最後の階層ならクリア）。進んだら true。</summary>
         public bool TryAdvanceFloor()

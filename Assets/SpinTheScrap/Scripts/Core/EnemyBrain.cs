@@ -3,9 +3,66 @@ using System.Numerics;
 
 namespace SpinTheScrap.Core
 {
-    /// <summary>敵の数値（要件書 4.2 敵）。すべて調整前の初期値。</summary>
+    public enum EnemyKind
+    {
+        /// <summary>這う者（雑魚）。群れで来る。倒すとガラクタを落とすことがある。</summary>
+        Crawler,
+        /// <summary>徘徊者。音と光に寄ってくる強い敵。</summary>
+        Lurker,
+        /// <summary>ボス：目の見えない巨体。</summary>
+        Brute,
+    }
+
+    /// <summary>敵の数値（docs/floor-design.md「敵」）。すべて調整前の初期値。</summary>
     public sealed class EnemyRules
     {
+        /// <summary>階層ごとの体力の倍率。</summary>
+        public double HealthFloorGrowth = 1.25;
+        /// <summary>階層ごとの攻撃の倍率。</summary>
+        public double DamageFloorGrowth = 1.15;
+        /// <summary>這う者を倒したときにガラクタを落とす確率。</summary>
+        public double CrawlerScrapDropChance = 0.35;
+
+        public double BaseHealth(EnemyKind kind)
+        {
+            switch (kind)
+            {
+                case EnemyKind.Crawler: return 40;
+                case EnemyKind.Lurker: return 150;
+                case EnemyKind.Brute: return 900;
+                default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+            }
+        }
+
+        public double BaseDamage(EnemyKind kind)
+        {
+            switch (kind)
+            {
+                case EnemyKind.Crawler: return 10;
+                case EnemyKind.Lurker: return 35;
+                case EnemyKind.Brute: return 45;
+                default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+            }
+        }
+
+        public double HealthFor(EnemyKind kind, int floor)
+        {
+            if (floor < 1) throw new ArgumentOutOfRangeException(nameof(floor));
+            return Math.Round(BaseHealth(kind) * Math.Pow(HealthFloorGrowth, floor - 1));
+        }
+
+        public double DamageFor(EnemyKind kind, int floor)
+        {
+            if (floor < 1) throw new ArgumentOutOfRangeException(nameof(floor));
+            return Math.Round(BaseDamage(kind) * Math.Pow(DamageFloorGrowth, floor - 1));
+        }
+
+        /// <summary>通常の階で同時にいる這う者の数。倒されると湧き直す。</summary>
+        public int CrawlerPopulationFor(int floor) => Math.Min(4 + floor, 12);
+
+        /// <summary>這う者が湧き直す間隔 (s)。階層に長くいるほど短くなる（長居するほど危ない）。</summary>
+        public double CrawlerRespawnSeconds(double secondsOnFloor) => Math.Max(4, 14 - secondsOnFloor / 30);
+
         public double WanderSpeed = 1.6;
         public double InvestigateSpeed = 2.8;
         /// <summary>プレイヤーの歩き（4m/s）より速く、走り（6.5m/s）より遅い。</summary>

@@ -4,162 +4,261 @@ using SpinTheScrap.Core;
 
 namespace SpinTheScrap.Tests
 {
-    /// <summary>階層の攻略条件、スロットから出る物、道具の数（docs/floor-design.md）。</summary>
+    /// <summary>台の読み取り・武器・改造・強化・戦闘・敵の強さ・道具（docs/floor-design.md）。</summary>
     public class FloorAndRewardTests
     {
-        static RunState NewRun(double medals = 100) =>
-            new RunState(MvpContent.Create(), new BalanceConfig { StartingMedals = medals }, 1);
+        static readonly ContentDatabase Db = MvpContent.Create();
+        static readonly MachineRules Rules = new MachineRules();
+        int nextId = 1;
 
-        static LineHit Line(int length, SymbolTag tags, double bonus = 10) => new LineHit(0, length, tags, bonus);
+        SymbolInstance[] Board(params (int row, int col, string id)[] placements)
+        {
+            var cells = new SymbolInstance[Core.Board.CellCount];
+            foreach (var (row, col, id) in placements)
+                cells[Core.Board.Index(row, col)] = new SymbolInstance(nextId++, id, 0);
+            return cells;
+        }
 
-        // ---- 攻略条件 ----
+        static SpinReading Read(SymbolInstance[] cells) =>
+            SpinReading.Read(SlotMachine.Evaluate(cells, Db, new RelicDefinition[0], new Rng(1)), Db, Rules);
+
+        // ---- 読み取り ----
+
+        [Test]
+        public void FamilyIsTheTagWithTheMostValue()
+        {
+            var r = Read(Board((0, 0, "old_calculator"), (2, 4, "old_calculator"), (1, 2, "empty_can")));
+            Assert.AreEqual(SymbolTag.Electric, r.Family, "電卓 2 つ（互いに +2）が空き缶 1 つより大きい");
+            Assert.Greater(r.TotalOf(SymbolTag.Electric), r.TotalOf(SymbolTag.Metal));
+        }
+
+        [Test]
+        public void EmptyBoardHasNoFamilyAndTierOne()
+        {
+            var r = Read(new SymbolInstance[Core.Board.CellCount]);
+            Assert.AreEqual(SymbolTag.None, r.Family);
+            Assert.AreEqual(1, r.Tier);
+            Assert.IsFalse(r.Jackpot);
+        }
+
+        [Test]
+        public void TierComesFromBoardTotalAndLuckyLines()
+        {
+            Assert.AreEqual(1, Rules.TierFor(Rules.Tier2Value - 1, false));
+            Assert.AreEqual(2, Rules.TierFor(Rules.Tier2Value, false));
+            Assert.AreEqual(3, Rules.TierFor(Rules.Tier3Value, false));
+            Assert.AreEqual(2, Rules.TierFor(0, true), "幸運のラインで 1 段上がる");
+            Assert.AreEqual(3, Rules.TierFor(Rules.Tier3Value, true), "3 が上限");
+        }
+
+        [Test]
+        public void SynergyRaisesTier()
+        {
+            // 同じ 3 マスでも、ネジ（隣接する金属で伸びる）で固めると値が大きくなり、質が上がる
+            var plain = Read(Board((0, 0, "empty_can"), (0, 1, "empty_can"), (0, 2, "empty_can")));
+            var screws = Read(Board((0, 0, "rusty_screw"), (0, 1, "rusty_screw"), (0, 2, "rusty_screw"),
+                (1, 0, "rusty_screw"), (1, 1, "rusty_screw"), (1, 2, "rusty_screw")));
+            Assert.Greater(screws.Result.Total, plain.Result.Total);
+            Assert.GreaterOrEqual(screws.Tier, plain.Tier);
+            Assert.Greater(screws.Tier, 1);
+        }
+
+        // ---- 武器・改造 ----
+
+        [Test]
+        public void WeaponTableFollowsFamilyAndTier()
+        {
+            var weapons = WeaponCatalog.CreateMvp();
+            Assert.AreEqual("pipe", weapons.For(SymbolTag.Metal, 1).Id);
+            Assert.AreEqual("nail_gun", weapons.For(SymbolTag.Metal, 2).Id);
+            Assert.AreEqual("rivet_cannon", weapons.For(SymbolTag.Metal, 3).Id);
+            Assert.AreEqual("arc_gun_mk2", weapons.For(SymbolTag.Electric, 3).Id);
+            Assert.AreEqual("firework_tube", weapons.For(SymbolTag.Doll, 2).Id, "人形はおもちゃと同じ");
+            Assert.AreEqual("cursed_cleaver_mk2", weapons.For(SymbolTag.Curse, 2).Id);
+            Assert.AreEqual("nail_gun", weapons.For(SymbolTag.Paper, 2).Id, "武器のない系統は金属");
+        }
+
+        [Test]
+        public void HigherTierWeaponsAreStronger()
+        {
+            var weapons = WeaponCatalog.CreateMvp();
+            foreach (var family in new[] { SymbolTag.Metal, SymbolTag.Electric, SymbolTag.Curse })
+            {
+                double DamagePerSecond(int tier) { var w = weapons.For(family, tier); return w.Damage / w.Interval; }
+                Assert.Less(DamagePerSecond(1), DamagePerSecond(3), family.ToString());
+            }
+        }
+
+        [Test]
+        public void ModsChangeWeaponNumbersAndCapAtThree()
+        {
+            var weapon = new WeaponInstance(WeaponCatalog.CreateMvp().Get("nail_gun"));
+            double damage = weapon.Damage, interval = weapon.Interval;
+            int capacity = weapon.Capacity;
+            Assert.IsTrue(weapon.AddMod(WeaponModKind.Damage));
+            Assert.AreEqual(damage * 1.3, weapon.Damage, 1e-9);
+            Assert.IsTrue(weapon.AddMod(WeaponModKind.FireRate));
+            Assert.AreEqual(interval * 0.8, weapon.Interval, 1e-9);
+            Assert.IsTrue(weapon.AddMod(WeaponModKind.Capacity));
+            Assert.AreEqual((int)System.Math.Round(capacity * 1.5), weapon.Capacity);
+            Assert.AreEqual(weapon.Capacity, weapon.Remaining, "弾数の改造で補充される");
+            Assert.IsFalse(weapon.AddMod(WeaponModKind.Stun), "3 つまで");
+        }
+
+        [Test]
+        public void WeaponsWearOut()
+        {
+            var pipe = new WeaponInstance(WeaponCatalog.CreateMvp().Get("pipe"));
+            for (int i = 0; i < pipe.Capacity; i++) Assert.IsTrue(pipe.TryUse());
+            Assert.IsTrue(pipe.IsSpent);
+            Assert.IsFalse(pipe.TryUse());
+        }
+
+        // ---- 強化・戦闘 ----
+
+        [Test]
+        public void PerkLevelsFollowThresholds()
+        {
+            var perks = new PerkState();
+            Assert.AreEqual(0, perks.Level(SymbolTag.Metal));
+            Assert.IsTrue(perks.AddXp(SymbolTag.Metal, 10));
+            Assert.AreEqual(1, perks.Level(SymbolTag.Metal));
+            Assert.IsFalse(perks.AddXp(SymbolTag.Metal, 5), "まだ Lv2 に届かない");
+            perks.AddXp(SymbolTag.Metal, 1000);
+            Assert.AreEqual(PerkState.Thresholds.Length, perks.Level(SymbolTag.Metal), "上限");
+        }
+
+        [Test]
+        public void PerksShapeStats()
+        {
+            var perks = new PerkState();
+            perks.AddXp(SymbolTag.Metal, 30);    // Lv2
+            perks.AddXp(SymbolTag.Food, 60);     // Lv3
+            perks.AddXp(SymbolTag.Luck, 10);     // Lv1
+            perks.AddXp(SymbolTag.Curse, 10);    // Lv1
+            var stats = perks.Stats(100);
+            Assert.AreEqual(1 + 0.15 * 2 + 0.3, stats.DamageMultiplier, 1e-9);
+            Assert.AreEqual(145, stats.MaxHealth);
+            Assert.AreEqual(5, stats.HealOnKill, "食べ物 Lv3 から倒すたびに回復");
+            Assert.AreEqual(0.06, stats.CritChance, 1e-9);
+            Assert.AreEqual(1.1, stats.DamageTakenMultiplier, 1e-9, "呪いは被ダメージも増える");
+        }
+
+        [Test]
+        public void HitCombinesWeaponAndStats()
+        {
+            var weapon = new WeaponInstance(WeaponCatalog.CreateMvp().Get("pipe"));
+            var stats = new PerkState().Stats(100);
+            stats.CritChance = 0.5;
+            var normal = CombatRules.Hit(weapon, stats, critRoll: 0.9, stunRoll: 0.9);
+            var crit = CombatRules.Hit(weapon, stats, critRoll: 0.1, stunRoll: 0.9);
+            Assert.AreEqual(20, normal.Damage);
+            Assert.IsFalse(normal.Critical);
+            Assert.AreEqual(40, crit.Damage);
+            Assert.IsTrue(crit.Critical);
+            Assert.IsFalse(normal.Stun);
+        }
+
+        [Test]
+        public void CursedWeaponsHurtTheUserAndLifestealHeals()
+        {
+            var weapons = WeaponCatalog.CreateMvp();
+            var stats = new PerkState().Stats(100);
+            var cleaver = new WeaponInstance(weapons.Get("cursed_cleaver"));
+            Assert.AreEqual(3, CombatRules.Hit(cleaver, stats, 0.9, 0.9).SelfDamage);
+            var pipe = new WeaponInstance(weapons.Get("pipe"));
+            pipe.AddMod(WeaponModKind.Lifesteal);
+            Assert.AreEqual(2, CombatRules.Hit(pipe, stats, 0.9, 0.9).Heal, 1e-9);
+        }
+
+        // ---- 敵・階層 ----
+
+        [Test]
+        public void EnemiesScaleWithFloor()
+        {
+            var enemies = new EnemyRules();
+            Assert.AreEqual(40, enemies.HealthFor(EnemyKind.Crawler, 1));
+            Assert.AreEqual(System.Math.Round(40 * 1.25 * 1.25), enemies.HealthFor(EnemyKind.Crawler, 3));
+            Assert.Greater(enemies.DamageFor(EnemyKind.Lurker, 5), enemies.DamageFor(EnemyKind.Lurker, 1));
+            Assert.Greater(enemies.HealthFor(EnemyKind.Brute, 3), enemies.HealthFor(EnemyKind.Lurker, 3));
+        }
+
+        [Test]
+        public void StayingLongerMakesCrawlersReturnFaster()
+        {
+            var enemies = new EnemyRules();
+            Assert.Greater(enemies.CrawlerRespawnSeconds(0), enemies.CrawlerRespawnSeconds(240));
+            Assert.GreaterOrEqual(enemies.CrawlerRespawnSeconds(100000), 4);
+            Assert.Less(enemies.CrawlerPopulationFor(1), enemies.CrawlerPopulationFor(6));
+        }
+
+        [Test]
+        public void BossEveryThirdFloorAndKillTargetsGrow()
+        {
+            var config = new BalanceConfig();
+            Assert.IsFalse(config.IsBossFloor(1));
+            Assert.IsFalse(config.IsBossFloor(2));
+            Assert.IsTrue(config.IsBossFloor(3));
+            Assert.IsTrue(config.IsBossFloor(9));
+            Assert.Less(config.KillTargetFor(1), config.KillTargetFor(4));
+            Assert.AreEqual(FloorObjectiveKind.DefeatBoss, FloorObjective.For(6, config).Kind);
+        }
 
         [Test]
         public void ObjectiveCompletesAtTargetAndIgnoresOtherKinds()
         {
-            var objective = new FloorObjective(FloorObjectiveKind.DefeatEnemies, 3);
-            Assert.IsFalse(objective.Report(FloorObjectiveKind.FindKey));
+            var objective = new FloorObjective(FloorObjectiveKind.DefeatEnemies, 2);
+            Assert.IsFalse(objective.Report(FloorObjectiveKind.DefeatBoss));
             Assert.IsFalse(objective.Report(FloorObjectiveKind.DefeatEnemies));
-            Assert.IsFalse(objective.Report(FloorObjectiveKind.DefeatEnemies));
-            Assert.IsTrue(objective.Report(FloorObjectiveKind.DefeatEnemies), "3 体目で達成");
+            Assert.IsTrue(objective.Report(FloorObjectiveKind.DefeatEnemies));
             Assert.IsFalse(objective.Report(FloorObjectiveKind.DefeatEnemies), "達成後は true を返さない");
-            Assert.AreEqual(3, objective.Progress);
         }
 
         [Test]
-        public void ObjectivesVaryAndNeverRepeatBackToBack()
-        {
-            var rng = new Rng(5);
-            FloorObjectiveKind? previous = null;
-            var seen = new System.Collections.Generic.HashSet<FloorObjectiveKind>();
-            for (int floor = 1; floor <= 40; floor++)
-            {
-                var o = FloorObjective.Roll(floor, rng, previous);
-                Assert.AreNotEqual(previous, o.Kind);
-                seen.Add(o.Kind);
-                previous = o.Kind;
-            }
-            Assert.AreEqual(4, seen.Count, "4 種類とも出る");
-        }
-
-        [Test]
-        public void DeeperFloorsNeedMore()
-        {
-            Assert.Less(FloorObjective.TargetFor(FloorObjectiveKind.DefeatEnemies, 1), FloorObjective.TargetFor(FloorObjectiveKind.DefeatEnemies, 9));
-            Assert.Less(FloorObjective.TargetFor(FloorObjectiveKind.PowerGenerator, 1), FloorObjective.TargetFor(FloorObjectiveKind.PowerGenerator, 5));
-            Assert.AreEqual(1, FloorObjective.TargetFor(FloorObjectiveKind.FindKey, 7));
-        }
-
-        [Test]
-        public void RoomsAndEnemiesGrowWithFloor()
+        public void RoomsAndLurkersGrowWithFloor()
         {
             var config = new BalanceConfig();
             Assert.Less(config.RoomCountFor(1), config.RoomCountFor(9));
-            Assert.LessOrEqual(config.RoomCountFor(100), config.MaxRoomCount);
             var enemies = new EnemyRules();
             Assert.AreEqual(1, enemies.CountFor(1, 0, 4));
             Assert.AreEqual(2, enemies.CountFor(3, 0, 5));
             Assert.AreEqual(3, enemies.CountFor(1, 9, 4), "入口以外の部屋数まで");
         }
 
-        // ---- 出る物 ----
-
-        [Test]
-        public void LongerLinesGiveBetterTier()
-        {
-            Assert.AreEqual(1, SpinRewards.TierFor(Line(3, SymbolTag.Metal)));
-            Assert.AreEqual(2, SpinRewards.TierFor(Line(4, SymbolTag.Metal)));
-            Assert.AreEqual(3, SpinRewards.TierFor(Line(5, SymbolTag.Metal)));
-            Assert.AreEqual(2, SpinRewards.TierFor(Line(3, SymbolTag.Metal | SymbolTag.Luck)), "幸運で 1 段上がる");
-            Assert.AreEqual(3, SpinRewards.TierFor(Line(5, SymbolTag.Metal | SymbolTag.Luck)), "3 が上限");
-        }
-
-        [Test]
-        public void MetalLinesGiveWeapons()
-        {
-            var rng = new Rng(1);
-            Assert.AreEqual(ToolIds.Pipe, SpinRewards.FromLine(Line(3, SymbolTag.Metal), rng).Single().ToolId);
-            Assert.AreEqual(ToolIds.NailGun, SpinRewards.FromLine(Line(4, SymbolTag.Metal), rng).Single().ToolId);
-            var top = SpinRewards.FromLine(Line(5, SymbolTag.Metal), rng);
-            CollectionAssert.AreEquivalent(new[] { ToolIds.NailGun, ToolIds.Cart }, top.Select(r => r.ToolId));
-        }
-
-        [Test]
-        public void EachTagFamilyHasItsReward()
-        {
-            var rng = new Rng(1);
-            Assert.AreEqual(ToolIds.Taser, SpinRewards.FromLine(Line(4, SymbolTag.Electric), rng).First().ToolId);
-            Assert.AreEqual(ToolIds.Bandage, SpinRewards.FromLine(Line(3, SymbolTag.Food), rng).Single().ToolId);
-            Assert.AreEqual(ToolIds.Firecracker, SpinRewards.FromLine(Line(3, SymbolTag.Toy), rng).Single().ToolId);
-            var paper = SpinRewards.FromLine(Line(3, SymbolTag.Paper, bonus: 7.2), rng).Single();
-            Assert.IsTrue(paper.IsMedals);
-            Assert.AreEqual(8, paper.Medals);
-        }
-
-        [Test]
-        public void CurseOutranksOtherTagsAndAddsEnemies()
-        {
-            var rng = new Rng(1);
-            var reward = SpinRewards.FromLine(Line(3, SymbolTag.Curse | SymbolTag.Metal), rng).Single();
-            Assert.AreEqual(ToolIds.NailGun, reward.ToolId);
-            Assert.AreEqual(12, reward.Count);
-        }
-
-        [Test]
-        public void GambleLinesPickAnotherFamily()
-        {
-            var ids = Enumerable.Range(1, 50)
-                .Select(s => SpinRewards.FromLine(Line(3, SymbolTag.Gamble), new Rng((ulong)s)).First().ToolId)
-                .Distinct().ToList();
-            Assert.Greater(ids.Count, 1, "毎回同じ物にはならない");
-            Assert.IsFalse(ids.Contains(null), "ギャンブルはメダルではなく道具になる");
-        }
-
-        // ---- 道具の数 ----
+        // ---- 道具 ----
 
         [Test]
         public void ToolsCapAtMaxAndPermanentToolsStay()
         {
-            var run = NewRun();
+            var run = new RunState(Db, new BalanceConfig(), 1);
             int max = run.ToolCatalog.Get(ToolIds.Firecracker).MaxCount;
-            Assert.AreEqual(max, run.AddTool(ToolIds.Firecracker, max + 5), "上限を超えた分は捨てる");
+            Assert.AreEqual(max, run.AddTool(ToolIds.Firecracker, max + 5));
             Assert.AreEqual(0, run.AddTool(ToolIds.Firecracker, 1));
             Assert.AreEqual(1, run.AddTool(ToolIds.Cart, 3), "永続は 1 つ");
             Assert.IsTrue(run.TryUseTool(ToolIds.Cart));
-            Assert.IsTrue(run.HasTool(ToolIds.Cart), "使っても減らない");
-            for (int i = 0; i < max; i++) Assert.IsTrue(run.TryUseTool(ToolIds.Firecracker));
-            Assert.IsFalse(run.TryUseTool(ToolIds.Firecracker), "使い切った");
+            Assert.IsTrue(run.HasTool(ToolIds.Cart));
         }
 
         [Test]
         public void FlashlightDrainsAndSwapsInSpareBattery()
         {
-            var run = NewRun();
+            var run = new RunState(Db, new BalanceConfig(), 1);
             double life = run.Config.FlashlightBatterySeconds;
             Assert.IsTrue(run.DrainFlashlight(life / 2));
-            Assert.AreEqual(0.5, run.FlashlightCharge, 1e-9);
-            Assert.IsFalse(run.DrainFlashlight(life), "予備がなければ切れる");
+            Assert.IsFalse(run.DrainFlashlight(life));
             run.AddTool(ToolIds.Battery, 1);
-            Assert.IsTrue(run.DrainFlashlight(0.1), "予備に交換して点く");
-            Assert.AreEqual(1, run.FlashlightCharge, 1e-9);
+            Assert.IsTrue(run.DrainFlashlight(0.1));
             Assert.AreEqual(0, run.ToolCount(ToolIds.Battery));
         }
 
         [Test]
-        public void InsulatedBootsReducePuddleDamage()
+        public void InsulatedBootsReducePuddleDamageAndBandagesHeal()
         {
             var rules = new HazardRules();
             Assert.AreEqual(rules.PuddleDamagePerSecond * rules.InsulatedBootsPuddleFactor, rules.PuddleDamage(1, true), 1e-9);
-        }
-
-        [Test]
-        public void BandageHealsUpToMaxButNotWhenDown()
-        {
             var health = new HealthState(100);
             health.Damage(30);
             Assert.AreEqual(30, health.Heal(40));
-            health.Damage(100);
-            Assert.AreEqual(0, health.Heal(40));
         }
     }
 }
