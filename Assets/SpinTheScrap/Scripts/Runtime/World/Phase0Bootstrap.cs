@@ -414,6 +414,8 @@ namespace SpinTheScrap.World
                 basePanel.Visible = !basePanel.Visible;
                 currentCabinet = null; // Tab で開いたメニューは台から離れていても使える（台は映さない）
             }
+            // 台の前で開いたメニューは E でも閉じる（開いたときと同じキー）
+            if (basePanel.Visible && basePanel.Docked && !health.IsDown && GameInput.InteractPressed) basePanel.Visible = false;
             if (GameInput.EscapePressed)
             {
                 if (basePanel.Visible && !health.IsDown) basePanel.Visible = false;

@@ -232,3 +232,49 @@ machine.Perk.short,強化,Perk
 machine.Mod.short,改造,Mod
 machine.Tool.short,道具,Tool
 panel.spin_at_machine,{0}は、その台の前でレバーを引く。ここではリールの中身を見て、ガラクタを入れられる。,Pull the lever at the {0} itself. Here you can view its reel and add scrap to it.
+panel.close,閉じる（E / Esc）,Close (E / Esc)
+panel.step_haul,① 台に入れたガラクタ（{0}個）,① Scrap in the machine ({0})
+panel.step_spin,② レバーを引く,② Pull the lever
+panel.step_reel,③ この台のリール（{0}個）,③ This machine's reel ({0})
+panel.condition,状態 {0}%,condition {0}%
+panel.cash_in,換金 +{0}枚,Cash in +{0}
+panel.add_to_reel,リールに入れる,Add to reel
+panel.pull,レバーを引く　メダル {0}枚,Pull the lever   {0} medals
+panel.need_medals,メダルがあと {0}枚 足りない。ガラクタを換金しよう。,You need {0} more medals. Cash in some scrap.
+panel.spin_note,引くたびに値段が上がる（次の階層で元に戻る）。回すと大きな音で敵が寄ってくる。,Each pull costs more (resets next floor). Spinning is loud and draws enemies.
+panel.reel_empty,リールが空。ガラクタを入れよう。,The reel is empty. Add some scrap.
+panel.reel_note,多いタグほど盤面にそろいやすく、その効果が出やすい。,The more of a tag the reel holds the more often it lines up and the more likely its reward.
+panel.reel_list,中身を見る・廃棄する,Show contents / discard
+help.title,遊び方,How it works
+help.show,開く,Show
+help.hide,たたむ,Hide
+help.step1,① 拾ったガラクタを持って台の前で E。持っている物と、台の前の床に置いた物がまとめて入る。,① Bring scrap and press E at the machine. What you carry and what lies on the floor in front of it go in.
+help.step2,② 入れた物は「換金」してメダルにするか、「リールに入れる」かを選ぶ。リールに入れた物が、この台の絵柄になる。,② Cash each item in for medals or add it to the reel. What is in the reel becomes this machine's symbols.
+help.step3,③ メダルを払ってレバーを引く。リールの中から 15 マス（3段×5列）に並ぶ。,③ Pay medals and pull the lever. Symbols from the reel fill 15 cells (3 rows × 5 columns).
+help.lines,同じタグの絵柄が左の列から 3 つ以上つながると「ライン」でボーナス。盤面の合計が大きいほど良い物が出る（★の数）。,Matching tags connected from the left for 3 or more cells form a line bonus. A bigger board total gives a better reward (stars).
+help.Weapon,武器スロット：武器が出る。盤面でいちばん多いタグで武器の種類が決まる。,Weapon Slot: gives a weapon. The tag that dominates the board picks the type.
+help.Perk,強化スロット：盤面のタグの値がそのまま経験値になり、そのタグの能力が上がる。,Perk Slot: each tag's board value becomes XP and raises that tag's perk.
+help.Mod,改造スロット：手に持っている武器に改造が付く（1本に3つまで）。多いタグで改造の種類が決まる。,Mod Slot: adds a mod to your weapon (up to 3). The dominant tag picks the mod.
+help.Tool,道具スロット：多いタグで道具が決まる。合う道具がないタグはメダルになる。,Tool Slot: the dominant tag picks the item. Tags without an item pay out medals.
+reward.weapon_default,鉄パイプなど（金属の武器）,Metal weapons such as the pipe
+reward.perk.Metal,攻撃力が上がる,More damage
+reward.perk.Electric,攻撃で敵がひるみやすい,Attacks stun more often
+reward.perk.Curse,攻撃力が大きく上がる（受けるダメージも増える）,Much more damage (you take more too)
+reward.perk.Doll,敵に見つかりにくい,Harder for enemies to spot you
+reward.perk.Luck,会心が出やすい,More critical hits
+reward.perk.Gamble,換金のレートが上がる,Better cash-in rate
+reward.perk.Fragile,足が速くなる,Faster movement
+reward.perk.Toy,爆発の範囲が広がる,Bigger explosions
+reward.perk.Paper,近くの敵が壁越しに見える,See nearby enemies through walls
+reward.perk.Food,最大体力が上がる（Lv3 で倒すと回復）,More max health (Lv3: heal on kill)
+reward.tool.Food,包帯,Bandages
+reward.tool.Toy,爆竹,Firecrackers
+reward.tool.Doll,爆竹,Firecrackers
+reward.tool.Electric,電池（質★3で絶縁ブーツ）,Batteries (★3: insulated boots)
+reward.tool.Metal,質★3で台車（それ以外はメダル）,★3: a cart (otherwise medals)
+reward.tool.Curse,メダル,Medals
+reward.tool.Luck,メダル,Medals
+reward.tool.Gamble,メダル,Medals
+reward.tool.Fragile,メダル,Medals
+reward.tool.Paper,メダル,Medals
+hud.click_to_resume,画面をクリックすると操作に戻る,Click the screen to resume

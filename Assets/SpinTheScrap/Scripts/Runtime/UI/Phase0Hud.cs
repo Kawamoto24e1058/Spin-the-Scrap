@@ -32,8 +32,17 @@ namespace SpinTheScrap.UI
 
         void OnGUI()
         {
-            if (session == null || !player.InputEnabled) return;
+            if (session == null) return;
             EnsureStyles();
+            // メニューを閉じたあと、マウスのロックが外れていたら（エディタの Esc など）クリックで戻れることを出す
+            if (!player.InputEnabled && !BasePanel.IsOpen && Cursor.lockState != CursorLockMode.Locked && !Net.NetLobby.IsShowing)
+            {
+                var rect = new Rect(Screen.width / 2f - 220, Screen.height / 2f - 24, 440, 48);
+                UiTheme.Fill(rect, new Color(0f, 0f, 0f, 0.65f));
+                GUI.Label(rect, session.Strings.Get("hud.click_to_resume"), new GUIStyle(UiTheme.Big) { alignment = TextAnchor.MiddleCenter });
+                return;
+            }
+            if (!player.InputEnabled) return;
             var s = session.Strings;
             var run = session.Run;
 

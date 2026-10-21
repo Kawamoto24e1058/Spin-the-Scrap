@@ -35,6 +35,8 @@ namespace SpinTheScrap.UI
         MachineOutcome shownOutcome;
 
         public bool Visible { get; set; }
+        /// <summary>メニューが開いている（HUD が「クリックで戻る」の案内を出すかどうかに使う）。</summary>
+        public static bool IsOpen { get; private set; }
         /// <summary>倒れて開いた（閉じられず、「やり直す」だけが押せる）。Phase0Bootstrap が設定する。</summary>
         public bool OnDownedScreen { get; set; }
         /// <summary>今操作している台の種類。台に近づいて開いたときにその種類になる。</summary>
@@ -61,6 +63,7 @@ namespace SpinTheScrap.UI
 
         void Update()
         {
+            IsOpen = Visible;
             var action = pending;
             pending = null;
             action?.Invoke();
@@ -84,6 +87,12 @@ namespace SpinTheScrap.UI
             UiTheme.Fill(new Rect(area.x, area.y, area.width, 5f), Accent, true);
 
             GUILayout.BeginArea(new Rect(area.x + 18, area.y + 14, area.width - 36, area.height - 28));
+            if (Docked && !run.IsOver && !OnDownedScreen)
+            {
+                DrawDocked(area.width - 36f - 20f);
+                GUILayout.EndArea();
+                return;
+            }
             DrawHeader();
             if (run.IsOver)
             {
@@ -130,6 +139,173 @@ namespace SpinTheScrap.UI
                 GUILayout.EndScrollView();
             }
             GUILayout.EndArea();
+        }
+
+        // ---- 台の前で開いたとき：この台だけを、手順どおりに見せる ----
+
+        // 遊び方は最初だけ開いておき、1 回回したらたたむ（「開く」でいつでも見られる）
+        bool showHelp = true;
+
+        void DrawDocked(float width)
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            // 台の名前と、閉じるボタン
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(UiTheme.Colored(s.Get("machine." + Machine), Accent), UiTheme.Title);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(s.Get("panel.close"), UiTheme.Button, GUILayout.Width(150), GUILayout.Height(34))) Visible = false;
+            GUILayout.EndHorizontal();
+            GUILayout.Label(UiTheme.Colored(s.Format("panel.medals", session.Medals(run.Medals)), UiTheme.Gold) + "    " +
+                            UiTheme.Colored(s.Format("panel.lives", run.Lives), UiTheme.Danger) + "    " +
+                            s.Format("panel.floor", run.Floor, run.Config.FloorCount), UiTheme.Body);
+            if (!string.IsNullOrEmpty(session.Message)) GUILayout.Label(session.Message, UiTheme.Small);
+            GUILayout.Space(4);
+
+            leftScroll = Scroll(leftScroll);
+            GUILayout.BeginVertical(GUILayout.Width(width));
+            DrawHelp();
+            DrawDockedHaul();
+            DrawDockedSpin();
+            DrawReelSummary();
+            DrawLoadout();
+            DrawFlow();
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+        }
+
+        /// <summary>遊び方（たたんでおける）。</summary>
+        void DrawHelp()
+        {
+            var s = session.Strings;
+            UiTheme.BeginCard(new Color(0.1f, 0.12f, 0.16f, 0.96f));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(s.Get("help.title"), UiTheme.Heading);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(s.Get(showHelp ? "help.hide" : "help.show"), UiTheme.Tab, GUILayout.Width(90), GUILayout.Height(26))) showHelp = !showHelp;
+            GUILayout.EndHorizontal();
+            if (showHelp)
+            {
+                GUILayout.Label(s.Get("help.step1"), UiTheme.Body);
+                GUILayout.Label(s.Get("help.step2"), UiTheme.Body);
+                GUILayout.Label(s.Get("help.step3"), UiTheme.Body);
+                GUILayout.Label(UiTheme.Colored(s.Get("help.lines"), UiTheme.Muted), UiTheme.Small);
+                GUILayout.Label(UiTheme.Colored(s.Get("help." + Machine), Accent), UiTheme.Body);
+            }
+            UiTheme.EndCard();
+        }
+
+        /// <summary>① 台に入れたガラクタ：換金するか、この台のリールに入れるか。</summary>
+        void DrawDockedHaul()
+        {
+            var s = session.Strings;
+            var haul = session.Haul.ToList();
+            UiTheme.BeginCard();
+            GUILayout.Label(s.Format("panel.step_haul", haul.Count), UiTheme.Heading);
+            if (haul.Count == 0) GUILayout.Label(s.Get("panel.haul_empty"), UiTheme.Small);
+            foreach (var item in haul)
+            {
+                string condition = item.ValueFactor < 1 ? UiTheme.Colored(" " + s.Format("panel.condition", Mathf.RoundToInt((float)item.ValueFactor * 100)), UiTheme.Danger) : "";
+                GUILayout.Label(session.SymbolName(item.SymbolId) + condition + "   " + TagChips(session.Content.GetSymbol(item.SymbolId).Tags), UiTheme.Body);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(UiTheme.Colored(s.Format("panel.cash_in", session.Medals(session.MedalValueOf(item))), UiTheme.Gold), UiTheme.Button,
+                        GUILayout.Height(32), GUILayout.MinWidth(60)))
+                    pending = () => { session.ConvertToMedals(item); Sfx.Play2D(SfxClips.Coin, 0.6f); };
+                GUI.enabled = session.CanAddToReel(item);
+                var kind = Machine;
+                if (GUILayout.Button(s.Get("panel.add_to_reel"), UiTheme.Button, GUILayout.Height(32), GUILayout.MinWidth(60)))
+                    pending = () => { session.AddToReel(item, kind); Sfx.Play2D(SfxClips.Knock, 0.5f, 1.3f); };
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+                GUILayout.Space(4);
+            }
+            UiTheme.EndCard();
+        }
+
+        /// <summary>② レバーを引く：費用と、引けない理由、出た物。</summary>
+        void DrawDockedSpin()
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            int player = session.LocalPlayerId;
+            double cost = run.CostOf(Machine);
+            UiTheme.BeginCard();
+            GUILayout.Label(s.Get("panel.step_spin"), UiTheme.Heading);
+            bool spinning = OutcomeHidden != null && OutcomeHidden();
+            GUI.enabled = run.CanSpin(Machine, player) && !spinning;
+            if (GUILayout.Button(s.Format("panel.pull", session.Medals(cost)), UiTheme.AccentButton(Accent), GUILayout.Height(52)))
+                pending = SpinWithSound;
+            GUI.enabled = true;
+            string reason = null;
+            if (run.Medals < cost) reason = s.Format("panel.need_medals", session.Medals(cost - run.Medals));
+            else if (Machine == MachineKind.Mod && (run.Player(player).Weapon == null || !run.Player(player).Weapon.CanTakeMod)) reason = s.Get("base.mod_needs_weapon");
+            if (reason != null) GUILayout.Label(UiTheme.Colored(reason, UiTheme.Danger), UiTheme.Small);
+            else GUILayout.Label(UiTheme.Colored(s.Get("panel.spin_note"), UiTheme.Muted), UiTheme.Small);
+            DrawLastOutcome(false);
+            UiTheme.EndCard();
+        }
+
+        /// <summary>③ リールの中身：多いタグと、それで何が出やすいか。</summary>
+        void DrawReelSummary()
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            var reel = run.ReelOf(Machine);
+            UiTheme.BeginCard();
+            GUILayout.Label(s.Format("panel.step_reel", reel.Count), UiTheme.Heading);
+            var counts = new Dictionary<SymbolTag, int>();
+            foreach (var inst in reel)
+            {
+                var tags = session.Content.GetSymbol(inst.SymbolId).Tags;
+                foreach (SymbolTag t in System.Enum.GetValues(typeof(SymbolTag)))
+                    if (t != SymbolTag.None && tags.HasAny(t)) counts[t] = (counts.TryGetValue(t, out int n) ? n : 0) + 1;
+            }
+            int total = Mathf.Max(1, reel.Count);
+            foreach (var pair in counts.OrderByDescending(p => p.Value).Take(4))
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(s.Get("tag." + pair.Key) + UiTheme.Colored("  " + pair.Value, UiTheme.Muted), UiTheme.Body, GUILayout.Width(120));
+                var bar = GUILayoutUtility.GetRect(40f, 10f, GUILayout.Width(70));
+                bar.y += 8f;
+                UiTheme.Bar(bar, (float)pair.Value / total, Accent);
+                GUILayout.Label(UiTheme.Colored(RewardFor(Machine, pair.Key), UiTheme.Ink), UiTheme.Small);
+                GUILayout.EndHorizontal();
+            }
+            if (counts.Count == 0) GUILayout.Label(s.Get("panel.reel_empty"), UiTheme.Small);
+            GUILayout.Label(UiTheme.Colored(s.Get("panel.reel_note"), UiTheme.Muted), UiTheme.Small);
+            showReelList = GUILayout.Toggle(showReelList, " " + s.Get("panel.reel_list"), GUILayout.Height(22));
+            if (showReelList) DrawReelList();
+            UiTheme.EndCard();
+        }
+
+        bool showReelList;
+
+        /// <summary>この台で、このタグが多いと何が出やすいか。</summary>
+        string RewardFor(MachineKind kind, SymbolTag tag)
+        {
+            var s = session.Strings;
+            switch (kind)
+            {
+                case MachineKind.Weapon:
+                    var family = tag == SymbolTag.Doll ? SymbolTag.Toy : tag;
+                    var names = session.Run.Weapons.Weapons.Where(w => w.Family == family).OrderBy(w => w.Tier).Select(w => s.Get(w.NameKey)).ToList();
+                    return names.Count > 0 ? "→ " + string.Join("・", names) : "→ " + s.Get("reward.weapon_default");
+                case MachineKind.Mod:
+                    return "→ " + s.Get("mod." + WeaponInstance.ModFor(tag));
+                case MachineKind.Perk:
+                    return "→ " + s.Get("reward.perk." + tag);
+                default:
+                    return "→ " + s.Get("reward.tool." + tag);
+            }
+        }
+
+        /// <summary>タグを［金属］［電化製品］のように並べる。</summary>
+        string TagChips(SymbolTag tags)
+        {
+            var parts = new List<string>();
+            foreach (SymbolTag t in System.Enum.GetValues(typeof(SymbolTag)))
+                if (t != SymbolTag.None && tags.HasAny(t)) parts.Add("［" + session.Strings.Get("tag." + t) + "］");
+            return UiTheme.Colored(string.Join("", parts), UiTheme.Muted);
         }
 
         /// <summary>縦だけのスクロール。スクロールバーの幅を空けて、中身が右にはみ出さないようにする。</summary>
@@ -294,7 +470,11 @@ namespace SpinTheScrap.UI
 
         void SpinWithSound() => session.Spin(Machine);
 
-        static void PlaySpinSound(MachineOutcome outcome) => Sfx.Play2D(SfxClips.Spin, 0.7f);
+        void PlaySpinSound(MachineOutcome outcome)
+        {
+            Sfx.Play2D(SfxClips.Spin, 0.7f);
+            showHelp = false;
+        }
 
         // ---- 台に入れた物・リール・レリック ----
 
@@ -326,10 +506,18 @@ namespace SpinTheScrap.UI
         void DrawReel()
         {
             var s = session.Strings;
+            UiTheme.BeginCard();
+            GUILayout.Label(s.Format("base.reel", session.Run.ReelOf(Machine).Count), UiTheme.Heading);
+            DrawReelList();
+            UiTheme.EndCard();
+        }
+
+        /// <summary>リールのシンボル（同じ物はまとめて）と廃棄ボタン。</summary>
+        void DrawReelList()
+        {
+            var s = session.Strings;
             var run = session.Run;
             var reel = run.ReelOf(Machine);
-            UiTheme.BeginCard();
-            GUILayout.Label(s.Format("base.reel", reel.Count), UiTheme.Heading);
             // 同じシンボルはまとめて表示し、廃棄は 1 個ずつ（最後に入れた物から）
             foreach (var group in reel.GroupBy(r => r.SymbolId).ToList())
             {
@@ -344,7 +532,6 @@ namespace SpinTheScrap.UI
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
-            UiTheme.EndCard();
         }
 
         void DrawRelics()

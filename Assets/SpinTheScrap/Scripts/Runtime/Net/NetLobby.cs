@@ -24,6 +24,8 @@ namespace SpinTheScrap.Net
         GUIStyle title;
 
         public bool Visible { get; private set; } = true;
+        /// <summary>始める前の画面を出している（HUD は何も出さない）。</summary>
+        public static bool IsShowing { get; private set; } = true;
 
         public void Init(StringTable table, Action<NetMode, string> choose)
         {
@@ -45,6 +47,7 @@ namespace SpinTheScrap.Net
         {
             if (!Visible) return;
             Visible = false;
+            IsShowing = false;
             onChoose?.Invoke(mode, to ?? address);
         }
 
