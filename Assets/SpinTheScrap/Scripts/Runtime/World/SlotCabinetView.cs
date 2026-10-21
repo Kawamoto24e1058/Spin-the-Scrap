@@ -303,13 +303,23 @@ namespace SpinTheScrap.World
 
         // ---- 回す ----
 
-        /// <summary>回した結果を見せる（リールを流して、左の列から止める）。</summary>
-        public void Play(MachineOutcome spun)
+        bool remote;
+
+        /// <summary>ほかの人が回して動いた回数（確認用）。</summary>
+        public static int RemotePlays { get; private set; }
+
+        /// <summary>
+        /// 回した結果を見せる（リールを流して、左の列から止める）。byOther はほかの人が回したとき
+        /// （音を台の位置から鳴らす）。
+        /// </summary>
+        public void Play(MachineOutcome spun, bool byOther = false)
         {
+            remote = byOther;
+            if (byOther) RemotePlays++;
+            spinStart = Time.unscaledTime; // レバーもすぐ動かす
             outcome = spun;
             result = spun.Reading.Result;
             ClearOverlays();
-            spinStart = Time.unscaledTime;
             revealed = false;
             revealTime = spinStart + FirstStop + StopGap * (Board.Columns - 1) + 0.25f;
             for (int c = 0; c < Board.Columns; c++)
@@ -348,7 +358,7 @@ namespace SpinTheScrap.World
                         steps[c] = 0;
                         for (int j = 0; j < StripLength; j++) SetCell(strips[c, j], j == 0 ? RandomSymbol() : ResultSymbol(j - 1, c));
                         bounce[c] = 1f;
-                        Sfx.Play2D(SfxClips.Knock, 0.45f, 1.6f + c * 0.06f);
+                        Sound(SfxClips.Knock, 0.45f, 1.6f + c * 0.06f);
                     }
                     else
                     {
@@ -447,8 +457,15 @@ namespace SpinTheScrap.World
                         "+" + NumberFormatter.Format(cell.Value, context.Strings.Language)).gameObject);
             }
             led.text = context.Strings.Format("cabinet.total", NumberFormatter.Format(result.Total, context.Strings.Language));
-            if (result.Lines.Count > 0) Sfx.Play2D(SfxClips.Coin, 0.5f, 1.1f);
-            if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Sfx.Play2D(SfxClips.Win, 0.6f);
+            if (result.Lines.Count > 0) Sound(SfxClips.Coin, 0.5f, 1.1f);
+            if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Sound(SfxClips.Win, 0.6f, 1f);
+        }
+
+        /// <summary>自分が回したときは画面の音、ほかの人のときは台の位置から鳴らす。</summary>
+        void Sound(AudioClip clip, float volume, float pitch)
+        {
+            if (remote) Sfx.PlayAt(clip, window.position, volume, pitch);
+            else Sfx.Play2D(clip, volume, pitch);
         }
 
         Vector3 CellCenter(int index)

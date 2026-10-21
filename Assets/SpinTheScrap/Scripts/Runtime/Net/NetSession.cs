@@ -66,6 +66,20 @@ namespace SpinTheScrap.Net
             state.Value = session.SaveState();
         }
 
+        /// <summary>ホスト：誰か（playerId）が台（cabinetIndex）を回したことを全員に知らせる。回した本人以外の画面で台が回る。</summary>
+        [Server]
+        public void ShowSpin(int cabinetIndex, string before, int kind, int playerId) => ShowSpinRpc(cabinetIndex, before, kind, playerId);
+
+        [ObserversRpc]
+        void ShowSpinRpc(int cabinetIndex, string before, int kind, int playerId)
+        {
+            if (LocalSession == null || playerId == LocalSession.LocalPlayerId) return; // 本人は自分の画面で回している
+            var cabinet = World.MachineCabinet.At(cabinetIndex);
+            if (cabinet == null) return;
+            var outcome = LocalSession.PreviewSpin(before, (Core.MachineKind)kind, playerId);
+            if (outcome != null) cabinet.View.Play(outcome, byOther: true);
+        }
+
         /// <summary>ホストが今のランと階層を配る。</summary>
         [Server]
         public void Publish(ulong seed, int currentFloor, int currentAttempt)

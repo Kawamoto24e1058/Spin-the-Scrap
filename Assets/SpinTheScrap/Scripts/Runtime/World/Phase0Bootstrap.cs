@@ -404,6 +404,7 @@ namespace SpinTheScrap.World
             else viewFocus.Release();
             basePanel.Docked = currentCabinet != null;
             basePanel.CabinetKind = currentCabinet != null ? currentCabinet.Kind : (MachineKind?)null;
+            session.CurrentCabinetIndex = currentCabinet != null ? currentCabinet.Index : -1;
             // 台を映している間は懐中電灯を消す（リールの窓が白く飛ぶ）。閉じたら元に戻す
             if (basePanel.Docked && flashlight.IsOn)
             {
@@ -650,6 +651,7 @@ namespace SpinTheScrap.World
         /// </summary>
         void PlaceMachines(int floor, Rng rng)
         {
+            MachineCabinet.Placed.Clear();
             var root = facility.Root;
             bool bossFloor = session.Run.Config.IsBossFloor(floor);
             var kinds = new List<MachineKind> { MachineKind.Weapon, MachineKind.Perk, MachineKind.Tool };
@@ -697,6 +699,9 @@ namespace SpinTheScrap.World
             var rules = session.Run.MachineRules;
             // 台の前なら台のリールを回して見せる（当たりの音は止まったときに台が鳴らす）
             if (currentCabinet != null) currentCabinet.View.Play(outcome);
+            // ホストが自分で回したら、ほかの人の画面でもこの台を回す（クライアントの分は NetPlayer が知らせる）
+            if (mode == NetMode.Host && currentCabinet != null && NetSession.Instance != null && session.LastSpinBefore != null)
+                NetSession.Instance.ShowSpin(currentCabinet.Index, session.LastSpinBefore, (int)outcome.Kind, session.LocalPlayerId);
             else if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Audio.Sfx.Play2D(Audio.SfxClips.Win, 0.6f);
             NoiseEvents.Emit(position, (float)(outcome.Reading.Jackpot ? rules.JackpotNoiseRadius : rules.SpinNoiseRadius));
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SpinTheScrap.Core;
 using SpinTheScrap.Interaction;
 using UnityEngine;
@@ -27,6 +28,18 @@ namespace SpinTheScrap.World
                 default: return new Color(0.45f, 0.9f, 0.4f);
             }
         }
+
+        /// <summary>
+        /// この階層に置いた台（置いた順）。どのマシンでも同じ順に置くので、協力プレイでは番号で台を指せる。
+        /// 階層を組み立て直すときに Phase0Bootstrap が空にする。
+        /// </summary>
+        public static readonly List<MachineCabinet> Placed = new List<MachineCabinet>();
+
+        /// <summary>Placed の中の番号。</summary>
+        public int Index { get; private set; }
+
+        public static MachineCabinet At(int index) =>
+            index >= 0 && index < Placed.Count && Placed[index] != null ? Placed[index] : null;
 
         /// <summary>見た目と動き（リール・電飾・レバー）。</summary>
         public SlotCabinetView View { get; private set; }
@@ -57,6 +70,8 @@ namespace SpinTheScrap.World
             cabinet.View = view;
             cabinet.Hopper = hopper;
             cabinet.onUse = onUse;
+            cabinet.Index = Placed.Count;
+            Placed.Add(cabinet);
             return cabinet;
         }
 

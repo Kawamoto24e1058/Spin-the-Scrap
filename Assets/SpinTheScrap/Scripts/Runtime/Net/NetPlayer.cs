@@ -178,15 +178,16 @@ namespace SpinTheScrap.Net
             Push();
         }
 
-        public void Spin(MachineKind kind) => SpinRpc((int)kind);
+        public void Spin(MachineKind kind) => SpinRpc((int)kind, Run != null ? Run.CurrentCabinetIndex : -1);
 
         [ServerRpc]
-        void SpinRpc(int kind)
+        void SpinRpc(int kind, int cabinetIndex)
         {
             if (Run == null) return;
             string before = Run.SpinFor((MachineKind)kind, OwnerId);
             if (before == null) return;
             ReplaySpinRpc(Owner, before, kind); // 状態より先に届く（同じ順で送られる）
+            if (NetSession.Instance != null) NetSession.Instance.ShowSpin(cabinetIndex, before, kind, OwnerId);
             Push();
         }
 

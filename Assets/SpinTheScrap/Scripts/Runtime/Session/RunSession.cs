@@ -100,6 +100,24 @@ namespace SpinTheScrap.Session
         /// <summary>ランを始めた時刻（結果画面のプレイ時間。メニューで止めている間も数える）。</summary>
         public float RunStartRealtime { get; private set; }
 
+        BalanceConfig NewConfig() => mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig();
+
+        /// <summary>いま前に立っている台の番号（MachineCabinet.Placed）。協力プレイでほかの人の画面の台も回して見せる。</summary>
+        public int CurrentCabinetIndex { get; set; } = -1;
+        /// <summary>直前に回す直前の状態（RunState.Save）。協力プレイのホストが、ほかの人に台の動きを見せるのに使う。</summary>
+        public string LastSpinBefore { get; private set; }
+
+        /// <summary>
+        /// ほかの人が回した結果を、このマシンのランを変えずに作り直す（回す直前の状態から同じ乱数で回す）。
+        /// 台のリールの動きを見せるだけに使う。
+        /// </summary>
+        public MachineOutcome PreviewSpin(string before, MachineKind kind, int playerId)
+        {
+            var scratch = new RunState(Content, NewConfig(), 1);
+            scratch.Load(before);
+            return scratch.TrySpin(kind, playerId, out var outcome) ? outcome : null;
+        }
+
         public void NewRun()
         {
             if (Remote != null)
@@ -111,7 +129,7 @@ namespace SpinTheScrap.Session
             ulong runSeed = seed != 0 ? (ulong)seed : (ulong)DateTime.UtcNow.Ticks;
             RunSeed = runSeed;
             Attempt = 0;
-            Run = new RunState(Content, mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig(), runSeed);
+            Run = new RunState(Content, NewConfig(), runSeed);
             haul.Clear();
             nextHaulId = 1;
             LastSpin = null;
@@ -243,7 +261,9 @@ namespace SpinTheScrap.Session
                 if (Run.CanSpin(kind, LocalPlayerId)) Remote.Spin(kind);
                 return false;
             }
+            string before = Run.Save();
             if (!Run.TrySpin(kind, LocalPlayerId, out var outcome)) return false;
+            LastSpinBefore = before;
             ShowOutcome(outcome);
             return true;
         }
