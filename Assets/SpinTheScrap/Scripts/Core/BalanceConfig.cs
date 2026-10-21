@@ -18,6 +18,8 @@ namespace SpinTheScrap.Core
         /// <summary>残機。倒れると 1 減ってその階層をやり直す。0 でラン終了。</summary>
         public int StartingLives = 3;
         public double StartingMedals = 10;
+        /// <summary>階層が 1 つ深くなるごとに、換金で得られるメダルが増える割合（地下 9 階で ×2.6）。</summary>
+        public double MedalValueFloorGrowth = 0.2;
 
         /// <summary>シンボルの廃棄手数料（× 階層）。</summary>
         public double RemovalFeePerFloor = 3;

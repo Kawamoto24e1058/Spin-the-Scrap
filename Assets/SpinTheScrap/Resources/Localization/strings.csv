@@ -88,6 +88,13 @@ objective.label,攻略条件：{0}（{1}）,Objective: {0} ({1})
 objective.done,達成,Done
 objective.DefeatEnemies,敵を倒す,Defeat enemies
 objective.DefeatBoss,ボスを倒す,Defeat the boss
+# --- ランの結果 ---
+result.cleared,攻略完了！最下層から脱出した。,Run cleared! You escaped from the bottom.
+result.failed,ゲームオーバー,Game over
+result.floor,到達：地下{0}階 / {1}階,Reached: B{0} of {1}
+result.kills,倒した敵：{0}体,Enemies defeated: {0}
+result.spins,回した回数：{0}回（大当たり {1}回・最高の質 {2}）,Spins: {0} (jackpots {1}, best tier {2})
+result.time,プレイ時間：{0}分{1}秒,Play time: {0}:{1}
 # --- 敵 ---
 enemy.Crawler,這う者,Crawler
 enemy.Lurker,徘徊者,Lurker

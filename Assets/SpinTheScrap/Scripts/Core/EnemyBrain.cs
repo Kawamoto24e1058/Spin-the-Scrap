@@ -186,6 +186,8 @@ namespace SpinTheScrap.Core
         public Vector3? HeardNoise;
         /// <summary>懐中電灯の光が当たった。</summary>
         public bool LitByFlashlight;
+        /// <summary>プレイヤーの見つかりにくさ（人形の強化）。見える距離が (1 - Stealth) 倍になる。</summary>
+        public double Stealth;
     }
 
     /// <summary>敵がこのフレームにすること。</summary>
@@ -237,7 +239,7 @@ namespace SpinTheScrap.Core
             to.Y = 0;
             float distance = to.Length();
             if (distance <= rules.SenseRange) return true;
-            if (distance > rules.SightRange) return false;
+            if (distance > rules.SightRange * (1 - p.Stealth)) return false;
             double cos = Vector3.Dot(Vector3.Normalize(to), p.Forward);
             return cos >= Math.Cos(rules.SightHalfAngle * Math.PI / 180.0);
         }

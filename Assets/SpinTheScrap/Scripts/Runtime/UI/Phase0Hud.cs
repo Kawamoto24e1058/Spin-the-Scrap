@@ -48,6 +48,7 @@ namespace SpinTheScrap.UI
 
             // 照準
             DrawCrosshair();
+            DrawRevealedEnemies();
 
             // 左上：ランの状況
             string status = s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
@@ -146,6 +147,27 @@ namespace SpinTheScrap.UI
             GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * ratio, bar.height), Texture2D.whiteTexture);
             GUI.color = c;
             ShadowLabel(new Rect(Screen.width / 2f - 150, Screen.height / 2f - 58, 300, 24), session.Strings.Get("enemy." + target.Kind), center);
+        }
+
+        /// <summary>紙の強化：近くの敵の位置を壁越しに印で出す。</summary>
+        void DrawRevealedEnemies()
+        {
+            double range = session.Run.StatsOf(session.LocalPlayerId).RevealRange;
+            if (range <= 0) return;
+            var cam = player.ViewCamera;
+            var prev = center.normal.textColor;
+            center.normal.textColor = new Color(1f, 0.35f, 0.3f, 0.85f);
+            foreach (var enemy in Enemies.Enemy.All)
+            {
+                if (enemy == null || enemy.IsDead) continue;
+                float distance = Vector3.Distance(enemy.transform.position, player.transform.position);
+                if (distance > range) continue;
+                var screen = cam.WorldToScreenPoint(enemy.transform.position);
+                if (screen.z <= 0) continue; // 後ろ
+                var rect = new Rect(screen.x - 30, Screen.height - screen.y - 12, 60, 24);
+                ShadowLabel(rect, "◆ " + Mathf.RoundToInt(distance) + "m", center);
+            }
+            center.normal.textColor = prev;
         }
 
         /// <summary>右下：手に持っている武器と残りの耐久・弾数。</summary>

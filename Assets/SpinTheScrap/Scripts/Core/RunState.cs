@@ -55,6 +55,11 @@ namespace SpinTheScrap.Core
         public bool IsCleared { get; private set; }
         /// <summary>次の階層で増える敵の数（マネキンの首など）。</summary>
         public int PendingEnemyBonus { get; private set; }
+        /// <summary>ランの記録（結果画面）。</summary>
+        public int Kills { get; private set; }
+        public int TotalSpins { get; private set; }
+        public int Jackpots { get; private set; }
+        public int BestTier { get; private set; }
         /// <summary>懐中電灯の電池の残り（0〜1）。ランを通して持ち越す。</summary>
         public double FlashlightCharge { get; private set; } = 1;
 
@@ -155,6 +160,9 @@ namespace SpinTheScrap.Core
             foreach (var dead in result.DestroyedInstances) reel.Remove(dead);
 
             var reading = SpinReading.Read(result, db, machineRules);
+            TotalSpins++;
+            if (reading.Jackpot) Jackpots++;
+            BestTier = Math.Max(BestTier, reading.Tier);
             outcome = new MachineOutcome { Kind = kind, Reading = reading, Cost = cost };
             var player = Player(playerId);
             switch (kind)
@@ -226,10 +234,11 @@ namespace SpinTheScrap.Core
             return medals;
         }
 
-        /// <summary>換金したときの枚数（割れ物の状態・レリック「錆びた秤」・ギャンブルの強化を含む）。</summary>
+        /// <summary>換金したときの枚数（割れ物の状態・深さ・レリック「錆びた秤」・ギャンブルの強化を含む）。</summary>
         public double MedalValueFor(string symbolId, double valueFactor = 1, int playerId = 0)
         {
-            double value = db.GetSymbol(symbolId).SellPrice * Math.Max(0, valueFactor) * StatsOf(playerId).MedalRateMultiplier;
+            double depthBonus = 1 + config.MedalValueFloorGrowth * (Floor - 1);
+            double value = db.GetSymbol(symbolId).SellPrice * Math.Max(0, valueFactor) * StatsOf(playerId).MedalRateMultiplier * depthBonus;
             foreach (var r in relics)
                 if (r.Kind == RelicKind.SellPriceMultiplier) value *= r.Amount;
             return Math.Floor(value);
@@ -304,6 +313,14 @@ namespace SpinTheScrap.Core
         }
 
         // ---- 階層の進行 ----
+
+        /// <summary>敵を倒した（記録と、通常の階の攻略条件）。ボスなら isBoss。達成したら true。</summary>
+        public bool ReportKill(bool isBoss)
+        {
+            if (IsOver) return false;
+            Kills++;
+            return ReportObjective(isBoss ? FloorObjectiveKind.DefeatBoss : FloorObjectiveKind.DefeatEnemies);
+        }
 
         /// <summary>攻略条件の進み具合を報告する。達成したら true（エレベーターが動く）。</summary>
         public bool ReportObjective(FloorObjectiveKind kind, double amount = 1)

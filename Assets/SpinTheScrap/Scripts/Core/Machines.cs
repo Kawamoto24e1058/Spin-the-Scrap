@@ -24,8 +24,11 @@ namespace SpinTheScrap.Core
         public double PerkBaseCost = 4;
         public double WeaponBaseCost = 6;
         public double ModBaseCost = 8;
-        /// <summary>階層が 1 つ深くなるごとの費用の倍率。</summary>
-        public double CostFloorGrowth = 1.5;
+        /// <summary>
+        /// 階層が 1 つ深くなるごとの費用の倍率。換金のレートも深いほど上がる（BalanceConfig.MedalValueFloorGrowth）ので、
+        /// どの階層でも 1 種類の台を 7〜9 回回せるくらいに合わせている。
+        /// </summary>
+        public double CostFloorGrowth = 1.2;
         /// <summary>同じ種類の台を同じ階で回すごとの費用の倍率。</summary>
         public double CostStepGrowth = 1.3;
 

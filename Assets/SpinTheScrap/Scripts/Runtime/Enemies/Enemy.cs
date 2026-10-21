@@ -59,9 +59,18 @@ namespace SpinTheScrap.Enemies
 
         /// <summary>どれかの敵が倒された（攻略条件・ガラクタを落とす・倒したときの回復に使う）。</summary>
         public static event Action<Enemy> AnyDied;
+        /// <summary>生きている敵（HUD で紙の強化の位置表示に使う）。</summary>
+        public static readonly System.Collections.Generic.List<Enemy> All = new System.Collections.Generic.List<Enemy>();
+        /// <summary>プレイヤーの見つかりにくさ（人形の強化）。Phase0Bootstrap が強化から設定する。</summary>
+        public static double PlayerStealth;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => AnyDied = null;
+        static void ResetStatics()
+        {
+            AnyDied = null;
+            All.Clear();
+            PlayerStealth = 0;
+        }
 
         /// <summary>見た目（仮素材）と当たり判定を組み立てて置く。</summary>
         public static Enemy Spawn(EnemyKind kind, int floor, Transform parent, Vector3 position, EnemyRules enemyRules,
@@ -162,9 +171,14 @@ namespace SpinTheScrap.Enemies
         {
             body = GetComponent<CharacterController>();
             NoiseEvents.Emitted += OnNoise;
+            All.Add(this);
         }
 
-        void OnDestroy() => NoiseEvents.Emitted -= OnNoise;
+        void OnDestroy()
+        {
+            NoiseEvents.Emitted -= OnNoise;
+            All.Remove(this);
+        }
 
         void OnNoise(Vector3 position, float radius)
         {
@@ -198,6 +212,7 @@ namespace SpinTheScrap.Enemies
         void Die()
         {
             dead = true;
+            All.Remove(this);
             Sfx.PlayAt(SfxClips.Groan, transform.position, 0.9f, kind == EnemyKind.Crawler ? 1.6f : kind == EnemyKind.Brute ? 0.6f : 1f);
             AnyDied?.Invoke(this);
             Destroy(gameObject);
@@ -276,6 +291,7 @@ namespace SpinTheScrap.Enemies
                 PlayerDown = playerHealth != null && playerHealth.IsDown,
                 HeardNoise = heardNoise.HasValue ? ToN(heardNoise.Value) : (NVector3?)null,
                 LitByFlashlight = lineOfSight && IsLitByFlashlight(cam),
+                Stealth = PlayerStealth,
             };
         }
 

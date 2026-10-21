@@ -9,8 +9,11 @@ namespace SpinTheScrap.Core
     /// </summary>
     public sealed class PerkState
     {
-        /// <summary>Lv1〜5 になる経験値。</summary>
-        public static readonly double[] Thresholds = { 10, 30, 60, 100, 150 };
+        /// <summary>
+        /// Lv1〜5 になる経験値。空き缶だけのリールだと 1 回 5 前後、組み合わせを作ると 20〜40 入るので、
+        /// うまく組めばランの終盤に Lv5 に届くくらいに合わせている。
+        /// </summary>
+        public static readonly double[] Thresholds = { 20, 60, 140, 260, 440 };
 
         readonly Dictionary<SymbolTag, double> xp = new Dictionary<SymbolTag, double>();
 
@@ -52,6 +55,8 @@ namespace SpinTheScrap.Core
                 ExplosionRadiusMultiplier = 1 + 0.15 * Level(SymbolTag.Toy),
                 HealOnKill = food >= 3 ? 5 : 0,
                 MedalRateMultiplier = 1 + 0.1 * Level(SymbolTag.Gamble),
+                RevealRange = 8 * Level(SymbolTag.Paper),
+                Stealth = Math.Min(0.6, 0.08 * Level(SymbolTag.Doll)),
             };
         }
     }
@@ -69,6 +74,10 @@ namespace SpinTheScrap.Core
         public double ExplosionRadiusMultiplier;
         public double HealOnKill;
         public double MedalRateMultiplier;
+        /// <summary>この距離 (m) 以内の敵の位置が壁越しに見える（紙）。</summary>
+        public double RevealRange;
+        /// <summary>敵の見える距離を減らす割合（人形）。0.2 なら 8 割の距離まで近づかないと見つからない。</summary>
+        public double Stealth;
     }
 
     /// <summary>1 回の攻撃の結果。</summary>

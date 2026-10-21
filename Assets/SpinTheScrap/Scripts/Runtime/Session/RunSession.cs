@@ -61,8 +61,12 @@ namespace SpinTheScrap.Session
             NewRun();
         }
 
+        /// <summary>ランを始めた時刻（結果画面のプレイ時間。メニューで止めている間も数える）。</summary>
+        public float RunStartRealtime { get; private set; }
+
         public void NewRun()
         {
+            RunStartRealtime = Time.realtimeSinceStartup;
             ulong runSeed = seed != 0 ? (ulong)seed : (ulong)DateTime.UtcNow.Ticks;
             Run = new RunState(Content, mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig(), runSeed);
             haul.Clear();

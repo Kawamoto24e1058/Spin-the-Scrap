@@ -95,8 +95,7 @@ namespace SpinTheScrap.World
         void OnEnemyDied(Enemy enemy)
         {
             var run = session.Run;
-            var kind = enemy.Kind == EnemyKind.Brute ? FloorObjectiveKind.DefeatBoss : FloorObjectiveKind.DefeatEnemies;
-            if (run.ReportObjective(kind))
+            if (run.ReportKill(enemy.Kind == EnemyKind.Brute))
             {
                 session.NotifyObjectiveComplete();
                 Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f);
@@ -127,6 +126,7 @@ namespace SpinTheScrap.World
                 health.State.SetMax(stats.MaxHealth);
             health.DamageTakenMultiplier = stats.DamageTakenMultiplier;
             player.PerkSpeedMultiplier = (float)stats.MoveSpeedMultiplier;
+            Enemy.PlayerStealth = stats.Stealth;
         }
 
         /// <summary>通常の階では、倒された這う者が湧き直す。階層に長くいるほど早く湧く（長居するほど危ない）。</summary>

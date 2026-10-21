@@ -281,6 +281,7 @@ namespace SpinTheScrap.UI
             var run = session.Run;
             if (run.IsOver)
             {
+                DrawResult();
                 if (GUILayout.Button(s.Get("base.new_run"), GUILayout.Height(36))) pending = session.NewRun;
                 return;
             }
@@ -297,6 +298,20 @@ namespace SpinTheScrap.UI
             if (GUILayout.Button(label, GUILayout.Height(36)))
                 pending = () => { if (session.TryAdvanceFloor() && !session.Run.IsOver) Visible = false; };
             GUI.enabled = true;
+        }
+
+        /// <summary>ランの結果（クリア・ゲームオーバー）。</summary>
+        void DrawResult()
+        {
+            var s = session.Strings;
+            var run = session.Run;
+            GUILayout.Label(s.Get(run.IsCleared ? "result.cleared" : "result.failed"));
+            int seconds = Mathf.RoundToInt(Time.realtimeSinceStartup - session.RunStartRealtime);
+            GUILayout.Label(s.Format("result.floor", run.Floor, run.Config.FloorCount));
+            GUILayout.Label(s.Format("result.kills", run.Kills));
+            GUILayout.Label(s.Format("result.spins", run.TotalSpins, run.Jackpots, run.BestTier));
+            GUILayout.Label(s.Format("result.time", seconds / 60, (seconds % 60).ToString("00")));
+            GUILayout.Space(8);
         }
 
         string TagNames(SymbolTag tags)

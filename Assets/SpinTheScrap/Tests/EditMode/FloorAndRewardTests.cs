@@ -121,9 +121,9 @@ namespace SpinTheScrap.Tests
         {
             var perks = new PerkState();
             Assert.AreEqual(0, perks.Level(SymbolTag.Metal));
-            Assert.IsTrue(perks.AddXp(SymbolTag.Metal, 10));
+            Assert.IsTrue(perks.AddXp(SymbolTag.Metal, PerkState.Thresholds[0]));
             Assert.AreEqual(1, perks.Level(SymbolTag.Metal));
-            Assert.IsFalse(perks.AddXp(SymbolTag.Metal, 5), "まだ Lv2 に届かない");
+            Assert.IsFalse(perks.AddXp(SymbolTag.Metal, 1), "まだ Lv2 に届かない");
             perks.AddXp(SymbolTag.Metal, 1000);
             Assert.AreEqual(PerkState.Thresholds.Length, perks.Level(SymbolTag.Metal), "上限");
         }
@@ -132,16 +132,40 @@ namespace SpinTheScrap.Tests
         public void PerksShapeStats()
         {
             var perks = new PerkState();
-            perks.AddXp(SymbolTag.Metal, 30);    // Lv2
-            perks.AddXp(SymbolTag.Food, 60);     // Lv3
-            perks.AddXp(SymbolTag.Luck, 10);     // Lv1
-            perks.AddXp(SymbolTag.Curse, 10);    // Lv1
+            perks.AddXp(SymbolTag.Metal, PerkState.Thresholds[1]);   // Lv2
+            perks.AddXp(SymbolTag.Food, PerkState.Thresholds[2]);    // Lv3
+            perks.AddXp(SymbolTag.Luck, PerkState.Thresholds[0]);    // Lv1
+            perks.AddXp(SymbolTag.Curse, PerkState.Thresholds[0]);   // Lv1
             var stats = perks.Stats(100);
             Assert.AreEqual(1 + 0.15 * 2 + 0.3, stats.DamageMultiplier, 1e-9);
             Assert.AreEqual(145, stats.MaxHealth);
             Assert.AreEqual(5, stats.HealOnKill, "食べ物 Lv3 から倒すたびに回復");
             Assert.AreEqual(0.06, stats.CritChance, 1e-9);
             Assert.AreEqual(1.1, stats.DamageTakenMultiplier, 1e-9, "呪いは被ダメージも増える");
+        }
+
+        [Test]
+        public void PaperRevealsAndDollHidesFromSight()
+        {
+            var perks = new PerkState();
+            perks.AddXp(SymbolTag.Paper, PerkState.Thresholds[1]);   // Lv2
+            perks.AddXp(SymbolTag.Doll, PerkState.Thresholds[2]);    // Lv3
+            var stats = perks.Stats(100);
+            Assert.AreEqual(16, stats.RevealRange);
+            Assert.AreEqual(0.24, stats.Stealth, 1e-9);
+
+            var rules = new EnemyRules();
+            var brain = new EnemyBrain(rules);
+            var p = new EnemyPerception
+            {
+                Position = System.Numerics.Vector3.Zero,
+                Forward = new System.Numerics.Vector3(0, 0, 1),
+                PlayerPosition = new System.Numerics.Vector3(0, 0, (float)(rules.SightRange * 0.9)),
+                HasLineOfSight = true,
+            };
+            Assert.IsTrue(brain.CanSee(p));
+            p.Stealth = stats.Stealth;
+            Assert.IsFalse(brain.CanSee(p), "見つかりにくいと、同じ距離でも気づかれない");
         }
 
         [Test]

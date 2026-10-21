@@ -78,7 +78,7 @@ namespace SpinTheScrap.Tests
         public void PerkMachineLevelsUpTheBoardsTags()
         {
             var run = Rich();
-            for (int i = 0; i < 5; i++) run.TrySpin(MachineKind.Perk, 0, out _);
+            for (int i = 0; i < 8; i++) run.TrySpin(MachineKind.Perk, 0, out _);
             Assert.Greater(run.Player(0).Perks.Level(SymbolTag.Metal), 0);
             Assert.Greater(run.StatsOf(0).DamageMultiplier, 1);
             Assert.AreEqual(0, run.Player(1).Perks.Level(SymbolTag.Metal));
@@ -130,6 +130,19 @@ namespace SpinTheScrap.Tests
 
             run.Player(0).Perks.AddXp(SymbolTag.Gamble, 1000); // Lv5 → +50%
             Assert.AreEqual(22, run.MedalValueFor("cracked_mirror"));
+        }
+
+        [Test]
+        public void DeeperFloorsPayMoreMedalsForTheSameScrap()
+        {
+            var run = NewRun();
+            double floor1 = run.MedalValueFor("cracked_mirror");
+            CompleteObjective(run);
+            run.AdvanceFloor();
+            CompleteObjective(run);
+            run.AdvanceFloor();
+            Assert.AreEqual(System.Math.Floor(15 * (1 + 2 * run.Config.MedalValueFloorGrowth)), run.MedalValueFor("cracked_mirror"));
+            Assert.Greater(run.MedalValueFor("cracked_mirror"), floor1);
         }
 
         [Test]
@@ -189,6 +202,19 @@ namespace SpinTheScrap.Tests
             run.OnDowned();
             Assert.IsTrue(run.IsFailed);
             Assert.IsFalse(run.ReportObjective(run.Objective.Kind, 1), "ランが終わったら進まない");
+        }
+
+        [Test]
+        public void RunRecordsKillsAndSpins()
+        {
+            var run = Rich();
+            Assert.IsFalse(run.ReportKill(false));
+            run.TrySpin(MachineKind.Tool, 0, out var outcome);
+            run.TrySpin(MachineKind.Perk, 0, out _);
+            Assert.AreEqual(1, run.Kills);
+            Assert.AreEqual(2, run.TotalSpins);
+            Assert.GreaterOrEqual(run.BestTier, outcome.Reading.Tier);
+            Assert.AreEqual(1, run.Objective.Progress, "倒した数が攻略条件に入る");
         }
 
         [Test]
