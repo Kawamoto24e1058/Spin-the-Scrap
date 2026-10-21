@@ -2,6 +2,7 @@ using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using SpinTheScrap.Core;
 using SpinTheScrap.Enemies;
+using SpinTheScrap.Interaction;
 using UnityEngine;
 
 namespace SpinTheScrap.Net
@@ -11,7 +12,7 @@ namespace SpinTheScrap.Net
     /// 種類・体力・ひるみを配る。位置は NetworkTransform（サーバー権威）。
     /// クライアントでは見た目と当たり判定だけを作り、当てた攻撃をホストへ送る。
     /// </summary>
-    public sealed class NetEnemy : NetworkBehaviour, IEnemyTarget
+    public sealed class NetEnemy : NetworkBehaviour, IEnemyTarget, IScrapHittable
     {
         readonly SyncVar<int> kind = new SyncVar<int>();
         readonly SyncVar<float> health = new SyncVar<float>();
@@ -84,10 +85,33 @@ namespace SpinTheScrap.Net
             if (NetPlayer.Local != null) NetPlayer.Local.SendHit(this, (float)damage, stun, (int)weaponFamily, explosive);
         }
 
-        /// <summary>ホスト：クライアントから届いた攻撃を本体に当てる。</summary>
-        public void ReceiveHit(float damage, bool stun, int weaponFamily, bool explosive)
+        /// <summary>ホスト：クライアント（attacker）から届いた攻撃を本体に当てる。</summary>
+        public void ReceiveHit(float damage, bool stun, int weaponFamily, bool explosive, int attacker)
         {
-            if (hostEnemy != null) hostEnemy.TakeDamage(damage, stun, (SymbolTag)weaponFamily, explosive);
+            if (hostEnemy == null) return;
+            Enemy.CurrentAttacker = attacker;
+            try { hostEnemy.TakeDamage(damage, stun, (SymbolTag)weaponFamily, explosive); }
+            finally { Enemy.CurrentAttacker = -1; }
+        }
+
+        /// <summary>投げたガラクタが当たった。クライアントで投げた物（その人のマシンで動いている）はホストへ伝える。</summary>
+        public void OnHitByScrap(Scrap scrap, float impactSpeed)
+        {
+            if (hostEnemy != null)
+            {
+                hostEnemy.OnHitByScrap(scrap, impactSpeed);
+                return;
+            }
+            if (NetPlayer.Local != null) NetPlayer.Local.SendScrapHit(this, impactSpeed);
+        }
+
+        /// <summary>ホスト：クライアントが投げたガラクタが当たった。</summary>
+        public void ReceiveScrapHit(float impactSpeed, int attacker)
+        {
+            if (hostEnemy == null) return;
+            Enemy.CurrentAttacker = attacker;
+            try { hostEnemy.OnHitByScrap(null, impactSpeed); }
+            finally { Enemy.CurrentAttacker = -1; }
         }
     }
 }

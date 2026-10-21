@@ -282,8 +282,18 @@ namespace SpinTheScrap.World
                 session.NotifyObjectiveComplete();
                 Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f);
             }
-            var stats = run.StatsOf(session.LocalPlayerId);
-            if (stats.HealOnKill > 0) health.Heal(stats.HealOnKill);
+            // 倒した人が回復する（食べ物の強化）。協力プレイでクライアントが倒したら、その人へ送る
+            int killer = enemy.LastAttacker >= 0 ? enemy.LastAttacker : session.LocalPlayerId;
+            var stats = run.StatsOf(killer);
+            if (stats.HealOnKill > 0)
+            {
+                if (killer == session.LocalPlayerId) health.Heal(stats.HealOnKill);
+                else
+                {
+                    var player = FindObjectsByType<NetPlayer>().FirstOrDefault(p => p.OwnerId == killer);
+                    if (player != null) player.HealFromKill((float)stats.HealOnKill);
+                }
+            }
             crawlers.Remove(enemy);
 
             if (enemy.Kind == EnemyKind.Crawler && spawnRng.NextDouble() < session.Enemies.CrawlerScrapDropChance)

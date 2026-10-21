@@ -320,7 +320,25 @@ namespace SpinTheScrap.Net
         [ServerRpc]
         void HitRpc(NetEnemy enemy, float damage, bool stun, int weaponFamily, bool explosive)
         {
-            if (enemy != null) enemy.ReceiveHit(damage, stun, weaponFamily, explosive);
+            if (enemy != null) enemy.ReceiveHit(damage, stun, weaponFamily, explosive, OwnerId);
+        }
+
+        public void SendScrapHit(NetEnemy enemy, float impactSpeed) => ScrapHitRpc(enemy, impactSpeed);
+
+        [ServerRpc]
+        void ScrapHitRpc(NetEnemy enemy, float impactSpeed)
+        {
+            if (enemy != null) enemy.ReceiveScrapHit(Mathf.Min(impactSpeed, 30f), OwnerId);
+        }
+
+        /// <summary>ホスト：この人が敵を倒したときの回復（食べ物の強化）。</summary>
+        [Server]
+        public void HealFromKill(float amount) => HealRpc(Owner, amount);
+
+        [TargetRpc]
+        void HealRpc(NetworkConnection conn, float amount)
+        {
+            if (LocalHealth != null) LocalHealth.Heal(amount);
         }
 
         // ---- 倒れた仲間を起こす・引きずる ----

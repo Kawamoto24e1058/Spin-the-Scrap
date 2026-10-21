@@ -247,6 +247,14 @@ namespace SpinTheScrap.Enemies
             heardNoiseDistance = distance;
         }
 
+        /// <summary>
+        /// 協力プレイのホスト：いま当てている攻撃が誰のものか（プレイヤーの番号。-1 はホスト自身）。
+        /// NetEnemy がクライアントの攻撃を当てる間だけ設定する。
+        /// </summary>
+        public static int CurrentAttacker { get; set; } = -1;
+        /// <summary>最後に攻撃した人（倒した人の回復に使う）。</summary>
+        public int LastAttacker { get; private set; } = -1;
+
         public void OnHitByScrap(Scrap scrap, float impactSpeed)
         {
             if (brain == null || dead) return;
@@ -262,6 +270,7 @@ namespace SpinTheScrap.Enemies
         public bool TakeDamage(double amount, bool stun, SymbolTag weaponFamily = SymbolTag.None, bool explosive = false)
         {
             if (dead || health == null) return false;
+            LastAttacker = CurrentAttacker;
             flashUntil = Time.time + FlashSeconds;
             amount *= rules.DamageTakenMultiplier(kind, weaponFamily, explosive, brain.State == EnemyState.Stunned);
             if (stun) brain.OnHit(double.MaxValue);
