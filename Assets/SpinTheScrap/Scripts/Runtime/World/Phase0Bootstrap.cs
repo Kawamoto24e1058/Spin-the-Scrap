@@ -54,6 +54,7 @@ namespace SpinTheScrap.World
             player.GetComponent<PlayerNoise>().Init(session.Enemies);
             combat.Init(session);
             Enemy.AnyDied += OnEnemyDied;
+            Enemy.SummonRequested = SummonMinion;
 
             var hud = gameObject.AddComponent<Phase0Hud>();
             hud.Init(session, player, interactor, health);
@@ -74,6 +75,7 @@ namespace SpinTheScrap.World
             }
             if (health != null) health.Downed -= OnPlayerDowned;
             Enemy.AnyDied -= OnEnemyDied;
+            Enemy.SummonRequested = null;
             Time.timeScale = 1f;
             AudioListener.pause = false;
         }
@@ -95,7 +97,7 @@ namespace SpinTheScrap.World
         void OnEnemyDied(Enemy enemy)
         {
             var run = session.Run;
-            if (run.ReportKill(enemy.Kind == EnemyKind.Brute))
+            if (run.ReportKill(EnemyRules.IsBoss(enemy.Kind)))
             {
                 session.NotifyObjectiveComplete();
                 Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f);
@@ -106,7 +108,7 @@ namespace SpinTheScrap.World
 
             if (enemy.Kind == EnemyKind.Crawler && spawnRng.NextDouble() < session.Enemies.CrawlerScrapDropChance)
                 DropScrap(enemy.transform.position, 0);
-            else if (enemy.Kind == EnemyKind.Brute)
+            else if (EnemyRules.IsBoss(enemy.Kind))
                 for (int i = 0; i < 6; i++) DropScrap(enemy.transform.position + Random.insideUnitSphere * 1.5f, 3);
         }
 
@@ -138,6 +140,14 @@ namespace SpinTheScrap.World
             if (crawlers.Count >= population || Time.time < nextCrawlerTime) return;
             nextCrawlerTime = Time.time + (float)session.Enemies.CrawlerRespawnSeconds(Time.time - floorStartTime);
             SpawnCrawler(awayFromPlayer: true);
+        }
+
+        /// <summary>群れを呼ぶ人形が呼んだ這う者。</summary>
+        Enemy SummonMinion(Enemy summoner, Vector3 position)
+        {
+            if (facility == null) return null;
+            return Enemy.Spawn(EnemyKind.Crawler, session.Run.Floor, facility.Root, new Vector3(position.x, 0f, position.z),
+                session.Enemies, facility, player, health, flashlight, spawnRng.NextULong());
         }
 
         void SpawnCrawler(bool awayFromPlayer)
@@ -303,7 +313,7 @@ namespace SpinTheScrap.World
             if (run.IsBossFloor)
             {
                 var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
-                Enemy.Spawn(EnemyKind.Brute, run.Floor, facility.Root, FacilityBuilder.RoomCenter(lair.Plan),
+                Enemy.Spawn(run.Config.BossFor(run.Floor), run.Floor, facility.Root, FacilityBuilder.RoomCenter(lair.Plan),
                     rules, facility, player, health, flashlight, spawnRng.NextULong());
                 return;
             }

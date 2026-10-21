@@ -9,8 +9,12 @@ namespace SpinTheScrap.Core
         Crawler,
         /// <summary>徘徊者。音と光に寄ってくる強い敵。</summary>
         Lurker,
-        /// <summary>ボス：目の見えない巨体。</summary>
+        /// <summary>ボス（地下 3 階）：目の見えない巨体。音へ突進し、壁や柱にぶつかるとひるむ。</summary>
         Brute,
+        /// <summary>ボス（地下 6 階）：電気を吸う機械。電気の武器か、ひるんでいるときしかまともに効かない。周りへ放電する。</summary>
+        Dynamo,
+        /// <summary>ボス（地下 9 階）：群れを呼ぶ人形。距離をとって這う者を呼ぶ。爆発に弱い。</summary>
+        Puppeteer,
     }
 
     /// <summary>敵の数値（docs/floor-design.md「敵」）。すべて調整前の初期値。</summary>
@@ -30,7 +34,44 @@ namespace SpinTheScrap.Core
                 case EnemyKind.Crawler: return 40;
                 case EnemyKind.Lurker: return 150;
                 case EnemyKind.Brute: return 900;
+                case EnemyKind.Dynamo: return 1400;
+                case EnemyKind.Puppeteer: return 700;
                 default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+            }
+        }
+
+        public static bool IsBoss(EnemyKind kind) => kind == EnemyKind.Brute || kind == EnemyKind.Dynamo || kind == EnemyKind.Puppeteer;
+
+        // ---- ボスの数値 ----
+
+        /// <summary>電気を吸う機械：電気以外の攻撃で受けるダメージの倍率（ひるんでいる間は等倍）。</summary>
+        public double DynamoResistance = 0.3;
+        /// <summary>電気を吸う機械：放電の間隔 (s)、光ってから撃つまで (s)、届く半径 (m)。</summary>
+        public double DynamoDischargeInterval = 5;
+        public double DynamoDischargeWarning = 1;
+        public double DynamoDischargeRadius = 7;
+        /// <summary>群れを呼ぶ人形：這う者を呼ぶ間隔 (s) と、同時に呼べる数。</summary>
+        public double PuppeteerSummonInterval = 6;
+        public int PuppeteerMaxMinions = 6;
+        /// <summary>群れを呼ぶ人形：この距離 (m) より近づかれると離れる。</summary>
+        public double PuppeteerKeepDistance = 9;
+        /// <summary>群れを呼ぶ人形：爆発で受けるダメージの倍率。</summary>
+        public double PuppeteerExplosionWeakness = 1.5;
+
+        /// <summary>
+        /// 敵が受けるダメージの倍率。電気を吸う機械は電気の武器かひるんでいるときだけ等倍、
+        /// 群れを呼ぶ人形は爆発に弱い。
+        /// </summary>
+        public double DamageTakenMultiplier(EnemyKind kind, SymbolTag weaponFamily, bool explosive, bool stunned)
+        {
+            switch (kind)
+            {
+                case EnemyKind.Dynamo:
+                    return weaponFamily == SymbolTag.Electric || stunned ? 1 : DynamoResistance;
+                case EnemyKind.Puppeteer:
+                    return explosive ? PuppeteerExplosionWeakness : 1;
+                default:
+                    return 1;
             }
         }
 
@@ -41,6 +82,8 @@ namespace SpinTheScrap.Core
                 case EnemyKind.Crawler: return 10;
                 case EnemyKind.Lurker: return 35;
                 case EnemyKind.Brute: return 45;
+                case EnemyKind.Dynamo: return 30;
+                case EnemyKind.Puppeteer: return 15;
                 default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
         }
@@ -90,6 +133,31 @@ namespace SpinTheScrap.Core
                     p.StunSeconds = 4;
                     p.LookAroundSeconds = 1.5;
                     p.FlashlightNoticeRange = 0;
+                    break;
+                case EnemyKind.Dynamo:
+                    // 重くて遅いが、よく見ている
+                    p.WanderSpeed = 0.8;
+                    p.InvestigateSpeed = 1.6;
+                    p.ChaseSpeed = 2.2;
+                    p.SightRange = 18;
+                    p.SightHalfAngle = 90;
+                    p.AttackRange = 2.4;
+                    p.AttackCooldown = 1.6;
+                    p.StunSeconds = 3;
+                    p.LoseSightSeconds = 8;
+                    break;
+                case EnemyKind.Puppeteer:
+                    // 見つけたら距離をとって呼び続ける（移動は Enemy 側で「離れる」に置き換える）
+                    p.WanderSpeed = 1.4;
+                    p.InvestigateSpeed = 2.5;
+                    p.ChaseSpeed = 3.2;
+                    p.SightRange = 20;
+                    p.SightHalfAngle = 100;
+                    p.SenseRange = 4;
+                    p.AttackRange = 1.6;
+                    p.AttackCooldown = 1;
+                    p.StunSeconds = 2;
+                    p.LoseSightSeconds = 10;
                     break;
             }
             return p;

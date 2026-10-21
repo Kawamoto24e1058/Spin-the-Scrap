@@ -26,8 +26,8 @@ namespace SpinTheScrap.Session
 
         [Tooltip("未設定なら MvpContent（コード定義）を使う")]
         [SerializeField] ContentDatabaseAsset contentAsset;
-        [Tooltip("MVP（5 階層）の数値で始める")]
-        [SerializeField] bool mvpBalance = true;
+        [Tooltip("試作（3 階層）の数値で始める。オフなら本番の 9 階層（ボス 3 体）")]
+        [SerializeField] bool mvpBalance;
         [Tooltip("0 ならランダム")]
         [SerializeField] int seed;
         [SerializeField] Language language = Language.Japanese;

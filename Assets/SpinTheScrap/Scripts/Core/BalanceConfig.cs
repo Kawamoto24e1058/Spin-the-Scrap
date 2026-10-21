@@ -39,6 +39,14 @@ namespace SpinTheScrap.Core
 
         public bool IsBossFloor(int floor) => floor >= 1 && BossEvery > 0 && floor % BossEvery == 0;
 
+        /// <summary>ボス階層のボス。1 体目は巨体、2 体目は電気を吸う機械、3 体目以降は群れを呼ぶ人形。</summary>
+        public EnemyKind BossFor(int floor)
+        {
+            if (!IsBossFloor(floor)) throw new ArgumentException("Not a boss floor: " + floor, nameof(floor));
+            int index = floor / BossEvery;
+            return index <= 1 ? EnemyKind.Brute : index == 2 ? EnemyKind.Dynamo : EnemyKind.Puppeteer;
+        }
+
         public int KillTargetFor(int floor)
         {
             if (floor < 1) throw new ArgumentOutOfRangeException(nameof(floor));

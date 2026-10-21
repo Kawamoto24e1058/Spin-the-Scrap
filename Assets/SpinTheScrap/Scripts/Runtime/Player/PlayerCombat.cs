@@ -192,7 +192,7 @@ namespace SpinTheScrap.Player
         void Hit(Enemy enemy, WeaponInstance weapon, PlayerStats stats, Vector3 point)
         {
             var result = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-            enemy.TakeDamage(result.Damage, result.Stun);
+            enemy.TakeDamage(result.Damage, result.Stun, weapon.Definition.Family);
             if (result.Heal > 0) health.Heal(result.Heal);
             if (result.SelfDamage > 0) health.Damage(result.SelfDamage);
             LastHitTime = Time.time;
@@ -210,7 +210,7 @@ namespace SpinTheScrap.Player
             foreach (var other in nearby)
             {
                 var link = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-                other.TakeDamage(link.Damage * chainDamageRatio, link.Stun);
+                other.TakeDamage(link.Damage * chainDamageRatio, link.Stun, weapon.Definition.Family);
                 ShowTracer(from, other.transform.position, new Color(0.5f, 0.8f, 1f));
                 from = other.transform.position;
             }
@@ -228,7 +228,7 @@ namespace SpinTheScrap.Player
                 if (alreadyHit.Contains(enemy)) continue;
                 float falloff = 1f - Mathf.Clamp01(Vector3.Distance(point, enemy.transform.position) / radius) * 0.5f;
                 var result = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-                enemy.TakeDamage(result.Damage * falloff, result.Stun);
+                enemy.TakeDamage(result.Damage * falloff, result.Stun, weapon.Definition.Family, explosive: true);
             }
             var flash = new GameObject("Explosion light").AddComponent<Light>();
             flash.transform.position = point;

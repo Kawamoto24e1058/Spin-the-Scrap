@@ -51,6 +51,10 @@ namespace SpinTheScrap.Enemies
         float nextStepTime;
         float flashUntil;
         bool dead;
+        Light coreLight;
+        float nextSpecialTime;
+        float dischargeAt = -1f;
+        readonly System.Collections.Generic.List<Enemy> minions = new System.Collections.Generic.List<Enemy>();
 
         public EnemyKind Kind => kind;
         public EnemyState State => brain != null ? brain.State : EnemyState.Wander;
@@ -59,6 +63,8 @@ namespace SpinTheScrap.Enemies
 
         /// <summary>どれかの敵が倒された（攻略条件・ガラクタを落とす・倒したときの回復に使う）。</summary>
         public static event Action<Enemy> AnyDied;
+        /// <summary>群れを呼ぶ人形が這う者を呼びたい（Phase0Bootstrap が呼び出して、呼んだ敵を返す）。</summary>
+        public static Func<Enemy, Vector3, Enemy> SummonRequested;
         /// <summary>生きている敵（HUD で紙の強化の位置表示に使う）。</summary>
         public static readonly System.Collections.Generic.List<Enemy> All = new System.Collections.Generic.List<Enemy>();
         /// <summary>プレイヤーの見つかりにくさ（人形の強化）。Phase0Bootstrap が強化から設定する。</summary>
@@ -68,6 +74,7 @@ namespace SpinTheScrap.Enemies
         static void ResetStatics()
         {
             AnyDied = null;
+            SummonRequested = null;
             All.Clear();
             PlayerStealth = 0;
         }
@@ -103,6 +110,27 @@ namespace SpinTheScrap.Enemies
                     Part(visual, PrimitiveType.Cube, new Vector3(-0.85f, 0.2f, 0.2f), new Vector3(0.35f, 1.4f, 0.35f), new Color(0.3f, 0.29f, 0.28f));
                     Part(visual, PrimitiveType.Cube, new Vector3(0.85f, 0.2f, 0.2f), new Vector3(0.35f, 1.4f, 0.35f), new Color(0.3f, 0.29f, 0.28f));
                     break;
+                case EnemyKind.Dynamo:
+                    cc.height = 2.6f;
+                    cc.radius = 0.9f;
+                    head = 2.2f;
+                    // 配電盤のような箱に、青く光るコイル
+                    Part(visual, PrimitiveType.Cube, new Vector3(0f, -0.1f, 0f), new Vector3(1.7f, 2.2f, 1.3f), new Color(0.22f, 0.25f, 0.3f));
+                    Part(visual, PrimitiveType.Cylinder, new Vector3(0f, 1.15f, 0f), new Vector3(0.9f, 0.15f, 0.9f), new Color(0.4f, 0.75f, 1f));
+                    Part(visual, PrimitiveType.Cylinder, new Vector3(0f, 0.75f, 0f), new Vector3(1.1f, 0.08f, 1.1f), new Color(0.4f, 0.75f, 1f));
+                    Part(visual, PrimitiveType.Cube, new Vector3(0f, 0.3f, 0.66f), new Vector3(0.9f, 0.5f, 0.04f), new Color(0.1f, 0.1f, 0.12f));
+                    break;
+                case EnemyKind.Puppeteer:
+                    cc.height = 2.4f;
+                    cc.radius = 0.4f;
+                    head = 2.1f;
+                    // 細長い人形。大きな白い頭と、垂れた糸
+                    Part(visual, PrimitiveType.Capsule, new Vector3(0f, -0.2f, 0f), new Vector3(0.45f, 0.9f, 0.35f), new Color(0.35f, 0.1f, 0.2f));
+                    Part(visual, PrimitiveType.Sphere, new Vector3(0f, 0.95f, 0f), new Vector3(0.6f, 0.65f, 0.6f), new Color(0.95f, 0.93f, 0.9f));
+                    Eyes(visual, new Vector3(0f, 1f, 0.28f), 0.12f, 0.08f);
+                    foreach (float x in new[] { -0.5f, 0.5f })
+                        Part(visual, PrimitiveType.Cube, new Vector3(x, 0.6f, 0f), new Vector3(0.01f, 1.6f, 0.01f), new Color(0.85f, 0.85f, 0.8f));
+                    break;
                 default:
                     cc.height = 2.1f;
                     cc.radius = 0.35f;
@@ -116,7 +144,7 @@ namespace SpinTheScrap.Enemies
             go.transform.position = position + Vector3.up * (cc.height / 2f + 0.05f);
 
             Light eye = null;
-            if (kind != EnemyKind.Brute)
+            if (kind != EnemyKind.Brute && kind != EnemyKind.Dynamo)
             {
                 eye = new GameObject("Eye light").AddComponent<Light>();
                 eye.transform.SetParent(visual, false);
@@ -143,10 +171,25 @@ namespace SpinTheScrap.Enemies
             enemy.renderers = visual.GetComponentsInChildren<Renderer>();
             enemy.baseColors = new Color[enemy.renderers.Length];
             for (int i = 0; i < enemy.renderers.Length; i++) enemy.baseColors[i] = MaterialUtil.GetColor(enemy.renderers[i].sharedMaterial);
-            if (kind != EnemyKind.Crawler)
-                enemy.drone = Sfx.CreateLoop(go, SfxClips.DroneLoop, 0.5f, kind == EnemyKind.Brute ? 30f : 18f);
+            if (kind == EnemyKind.Dynamo)
+            {
+                enemy.drone = Sfx.CreateLoop(go, SfxClips.BuzzLoop, 0.6f, 25f);
+                enemy.coreLight = new GameObject("Core light").AddComponent<Light>();
+                enemy.coreLight.transform.SetParent(visual, false);
+                enemy.coreLight.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+                enemy.coreLight.type = LightType.Point;
+                enemy.coreLight.color = new Color(0.45f, 0.75f, 1f);
+                enemy.coreLight.range = 6f;
+                enemy.coreLight.intensity = 2f;
+                enemy.nextSpecialTime = Time.time + (float)enemy.rules.DynamoDischargeInterval;
+            }
+            else if (kind != EnemyKind.Crawler)
+                enemy.drone = Sfx.CreateLoop(go, SfxClips.DroneLoop, 0.5f, IsBossKind(kind) ? 30f : 18f);
+            if (kind == EnemyKind.Puppeteer) enemy.nextSpecialTime = Time.time + 2f;
             return enemy;
         }
+
+        static bool IsBossKind(EnemyKind kind) => EnemyRules.IsBoss(kind);
 
         static void Part(Transform parent, PrimitiveType type, Vector3 localPosition, Vector3 scale, Color color, Quaternion? rotation = null)
         {
@@ -198,11 +241,15 @@ namespace SpinTheScrap.Enemies
             if (impactSpeed >= rules.StunHitSpeed) TakeDamage(impactSpeed * 1.5f, false);
         }
 
-        /// <summary>武器などでダメージを受ける。stun が true ならひるむ。倒れたら true。</summary>
-        public bool TakeDamage(double amount, bool stun)
+        /// <summary>
+        /// 武器などでダメージを受ける。stun が true ならひるむ。武器の系統と爆発かどうかで効き方が変わる（ボスの耐性・弱点）。
+        /// 倒れたら true。
+        /// </summary>
+        public bool TakeDamage(double amount, bool stun, SymbolTag weaponFamily = SymbolTag.None, bool explosive = false)
         {
             if (dead || health == null) return false;
             flashUntil = Time.time + FlashSeconds;
+            amount *= rules.DamageTakenMultiplier(kind, weaponFamily, explosive, brain.State == EnemyState.Stunned);
             if (stun) brain.OnHit(double.MaxValue);
             if (!health.Damage(amount)) return false;
             Die();
@@ -228,9 +275,73 @@ namespace SpinTheScrap.Enemies
             var decision = brain.Tick(Time.deltaTime, perception, ToN(wanderTarget.Value));
 
             if (decision.Attack && playerHealth != null) playerHealth.Damage(rules.AttackDamage);
+            if (kind == EnemyKind.Dynamo) UpdateDischarge(decision.State);
+            if (kind == EnemyKind.Puppeteer)
+            {
+                UpdateSummon(decision.State);
+                decision = KeepDistance(decision);
+            }
             Move(decision);
             UpdateLook(decision.State);
             UpdateSound(decision);
+        }
+
+        /// <summary>電気を吸う機械：数秒ごとにコイルが強く光り、1 秒後に周りへ放電する。範囲の外か、物陰にいればよけられる。</summary>
+        void UpdateDischarge(EnemyState state)
+        {
+            if (state == EnemyState.Stunned)
+            {
+                dischargeAt = -1f;
+                coreLight.intensity = 0.5f;
+                return;
+            }
+            if (dischargeAt < 0f && Time.time >= nextSpecialTime)
+            {
+                dischargeAt = Time.time + (float)rules.DynamoDischargeWarning;
+                Sfx.PlayAt(SfxClips.Shatter, transform.position, 0.6f, 0.5f);
+            }
+            if (dischargeAt >= 0f)
+            {
+                coreLight.intensity = Mathf.Lerp(2f, 14f, 1f - (dischargeAt - Time.time) / (float)rules.DynamoDischargeWarning);
+                coreLight.range = 6f + coreLight.intensity * 0.5f;
+                if (Time.time < dischargeAt) return;
+                dischargeAt = -1f;
+                nextSpecialTime = Time.time + (float)rules.DynamoDischargeInterval;
+                Sfx.PlayAt(SfxClips.Bang, transform.position, 1f, 1.8f);
+                NoiseEvents.Emit(transform.position, 20f);
+                var cam = player.ViewCamera.transform;
+                float distance = Vector3.Distance(transform.position, player.transform.position);
+                var center = transform.position + Vector3.up * 0.8f;
+                bool covered = Physics.Linecast(center, cam.position, out var hit, ~0, QueryTriggerInteraction.Ignore)
+                               && hit.collider != player.Controller && hit.collider != body;
+                if (distance <= rules.DynamoDischargeRadius && !covered && playerHealth != null) playerHealth.Damage(rules.AttackDamage * 1.5);
+            }
+            else coreLight.intensity = 2f;
+        }
+
+        /// <summary>群れを呼ぶ人形：見つけている間、数秒ごとに這う者を呼ぶ（同時に呼べる数に上限）。</summary>
+        void UpdateSummon(EnemyState state)
+        {
+            if (state != EnemyState.Chase && state != EnemyState.Investigate) return;
+            if (Time.time < nextSpecialTime) return;
+            nextSpecialTime = Time.time + (float)rules.PuppeteerSummonInterval;
+            minions.RemoveAll(m => m == null || m.IsDead);
+            if (minions.Count >= rules.PuppeteerMaxMinions || SummonRequested == null) return;
+            var offset = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * 1.8f;
+            var minion = SummonRequested(this, transform.position + offset);
+            if (minion != null) minions.Add(minion);
+            Sfx.PlayAt(SfxClips.Screech, transform.position, 0.6f, 1.6f);
+        }
+
+        /// <summary>群れを呼ぶ人形：近づかれすぎたら、プレイヤーから離れる方へ逃げる。</summary>
+        EnemyDecision KeepDistance(EnemyDecision decision)
+        {
+            if (decision.State != EnemyState.Chase) return decision;
+            var away = Flat(transform.position - player.transform.position);
+            if (away.magnitude >= rules.PuppeteerKeepDistance) return new EnemyDecision { State = decision.State, Attack = decision.Attack };
+            var target = transform.position + away.normalized * 4f;
+            decision.MoveTarget = ToN(target);
+            return decision;
         }
 
         /// <summary>巨体が音へ突進している最中に壁へぶつかると、ひるむ（爆竹でおびき寄せて叩くための隙）。</summary>

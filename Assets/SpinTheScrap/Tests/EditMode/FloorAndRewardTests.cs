@@ -233,6 +233,31 @@ namespace SpinTheScrap.Tests
         }
 
         [Test]
+        public void ThreeBossesInOrder()
+        {
+            var config = new BalanceConfig();
+            Assert.AreEqual(EnemyKind.Brute, config.BossFor(3));
+            Assert.AreEqual(EnemyKind.Dynamo, config.BossFor(6));
+            Assert.AreEqual(EnemyKind.Puppeteer, config.BossFor(9));
+            Assert.Throws<System.ArgumentException>(() => config.BossFor(4));
+            Assert.IsTrue(EnemyRules.IsBoss(EnemyKind.Dynamo));
+            Assert.IsFalse(EnemyRules.IsBoss(EnemyKind.Lurker));
+        }
+
+        [Test]
+        public void DynamoResistsAllButElectricOrStunAndPuppeteerFearsExplosions()
+        {
+            var rules = new EnemyRules();
+            Assert.AreEqual(rules.DynamoResistance, rules.DamageTakenMultiplier(EnemyKind.Dynamo, SymbolTag.Metal, false, false));
+            Assert.AreEqual(1, rules.DamageTakenMultiplier(EnemyKind.Dynamo, SymbolTag.Electric, false, false));
+            Assert.AreEqual(1, rules.DamageTakenMultiplier(EnemyKind.Dynamo, SymbolTag.Metal, false, true), "ひるんでいる間は効く");
+            Assert.AreEqual(rules.PuppeteerExplosionWeakness, rules.DamageTakenMultiplier(EnemyKind.Puppeteer, SymbolTag.Toy, true, false));
+            Assert.AreEqual(1, rules.DamageTakenMultiplier(EnemyKind.Puppeteer, SymbolTag.Metal, false, false));
+            Assert.AreEqual(1, rules.DamageTakenMultiplier(EnemyKind.Crawler, SymbolTag.Metal, false, false));
+            Assert.Greater(rules.HealthFor(EnemyKind.Dynamo, 6), rules.HealthFor(EnemyKind.Brute, 3));
+        }
+
+        [Test]
         public void RaisingMaxHealthAlsoRaisesCurrent()
         {
             var health = new HealthState(100);
