@@ -294,6 +294,14 @@ namespace SpinTheScrap.UI
                 if (GUILayout.Button(s.Get("base.new_run"), GUILayout.Height(36))) pending = session.NewRun;
                 return;
             }
+            if (OnDownedScreen && session.CoopRespawn)
+            {
+                // 協力プレイ：仲間に起こしてもらうか、あきらめて入口で起き上がる
+                GUILayout.Label(s.Get("base.wait_rescue"));
+                if (GUILayout.Button(s.Format("base.give_up", run.Lives), GUILayout.Height(36)))
+                    pending = () => { session.RestartFloor(); Visible = false; };
+                return;
+            }
             if (OnDownedScreen)
             {
                 if (GUILayout.Button(s.Format("base.retry_floor", run.Floor), GUILayout.Height(36)))

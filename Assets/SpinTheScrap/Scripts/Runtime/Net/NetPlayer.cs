@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
@@ -46,6 +47,13 @@ namespace SpinTheScrap.Net
         public static NetPlayer Local { get; private set; }
 
         public bool IsDown => down.Value;
+
+        /// <summary>このマシンのプレイヤーが仲間に起こされた。</summary>
+        public static event Action Revived;
+        /// <summary>このマシンの倒れているプレイヤーが、仲間に引きずられている（行き先）。</summary>
+        public static event Action<Vector3> DraggedTo;
+
+        Transform avatar;
 
         public override void OnStartClient()
         {
@@ -97,7 +105,19 @@ namespace SpinTheScrap.Net
 
         void Update()
         {
-            if (!IsOwner || LocalTarget == null) return;
+            if (!IsOwner)
+            {
+                // 倒れている仲間は横になって見える
+                if (avatar != null)
+                {
+                    avatar.localRotation = Quaternion.RotateTowards(avatar.localRotation,
+                        down.Value ? Quaternion.Euler(-90f, 0f, 0f) : Quaternion.identity, 240f * Time.deltaTime);
+                    avatar.localPosition = Vector3.MoveTowards(avatar.localPosition,
+                        down.Value ? new Vector3(0f, -0.6f, 0f) : Vector3.zero, 2f * Time.deltaTime);
+                }
+                return;
+            }
+            if (LocalTarget == null) return;
             transform.SetPositionAndRotation(LocalTarget.position, Quaternion.Euler(0f, LocalTarget.eulerAngles.y, 0f));
             bool isDown = LocalHealth != null && LocalHealth.IsDown;
             if (isDown != down.Value) SetDownRpc(isDown);
@@ -302,6 +322,32 @@ namespace SpinTheScrap.Net
             if (enemy != null) enemy.ReceiveHit(damage, stun, weaponFamily, explosive);
         }
 
+        // ---- 倒れた仲間を起こす・引きずる ----
+
+        /// <summary>倒れている仲間（target）を起こす。</summary>
+        public void Revive(NetPlayer target) => ReviveRpc(target);
+
+        [ServerRpc]
+        void ReviveRpc(NetPlayer target)
+        {
+            if (target != null && target.down.Value) target.RevivedRpc(target.Owner);
+        }
+
+        [TargetRpc]
+        void RevivedRpc(NetworkConnection conn) => Revived?.Invoke();
+
+        /// <summary>倒れている仲間（target）を position へ引きずる。</summary>
+        public void Drag(NetPlayer target, Vector3 position) => DragRpc(target, position);
+
+        [ServerRpc]
+        void DragRpc(NetPlayer target, Vector3 position)
+        {
+            if (target != null && target.down.Value) target.DraggedRpc(target.Owner, position);
+        }
+
+        [TargetRpc]
+        void DraggedRpc(NetworkConnection conn, Vector3 position) => DraggedTo?.Invoke(position);
+
         /// <summary>ホストの敵の攻撃がこの人に当たった。</summary>
         [TargetRpc]
         void TakeDamageRpc(NetworkConnection target, float amount)
@@ -313,6 +359,7 @@ namespace SpinTheScrap.Net
         {
             var root = new GameObject("Avatar").transform;
             root.SetParent(transform, false);
+            avatar = root;
             Part(root, PrimitiveType.Capsule, Vector3.zero, new Vector3(0.7f, 0.9f, 0.7f), color);
             Part(root, PrimitiveType.Cube, new Vector3(0f, 0.6f, 0.3f), new Vector3(0.5f, 0.15f, 0.1f), new Color(0.1f, 0.1f, 0.1f));
             var lamp = new GameObject("Lamp").AddComponent<Light>();

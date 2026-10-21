@@ -38,6 +38,9 @@ namespace SpinTheScrap.World
         Rng spawnRng;
         bool panelWasVisible;
         bool wasOver;
+        // 協力プレイ：倒れて仲間を待っている（あきらめたら残機が減る）
+        bool awaitingRescue;
+        int lostWhenDowned;
         PlayerCombat combat;
         float floorStartTime;
         float nextCrawlerTime;
@@ -70,6 +73,9 @@ namespace SpinTheScrap.World
             session.Spun += OnSpun;
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
+            gameObject.AddComponent<TeammateAssist>().Init(player, health, session.Hazards, session.Strings);
+            NetPlayer.Revived += OnRevived;
+            NetPlayer.DraggedTo += OnDragged;
 
             NetPlayer.LocalTarget = player.transform;
             NetPlayer.LocalHealth = health;
@@ -159,6 +165,7 @@ namespace SpinTheScrap.World
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             interactor.Inventory.TakeAll(); // 前の階層の物はホストが消している
+            awaitingRescue = false; // 仲間がエレベーターで次の階層へ連れて行ってくれた
             SpawnHazards(net.RunSeed, net.Floor, net.Attempt);
             PlaceMachines(net.Floor, FloorRng(net.RunSeed, net.Floor, net.Attempt, 2));
             basePanel.OnDownedScreen = false;
@@ -169,15 +176,35 @@ namespace SpinTheScrap.World
         static Rng FloorRng(ulong runSeed, int floor, int attempt, ulong salt) =>
             new Rng(FacilityLayout.SeedFor(runSeed, floor, attempt) ^ (0x9E3779B97F4A7C15UL * salt));
 
-        /// <summary>協力プレイで倒れたあと：入口で起き上がる（階層はそのまま）。</summary>
+        /// <summary>協力プレイで倒れたあと：入口で起き上がる（階層はそのまま）。仲間を待たずにあきらめたら残機が減る。</summary>
         void Respawn()
         {
+            if (awaitingRescue) session.ReportDowned(lostWhenDowned);
+            awaitingRescue = false;
             basePanel.OnDownedScreen = false;
             health.ResetHealth();
             player.Controller.enabled = false;
             var offset = mode == NetMode.Client ? Vector3.right * 1.5f : Vector3.zero;
             player.transform.SetPositionAndRotation(playerSpawn + offset, Quaternion.identity);
             player.Controller.enabled = true;
+        }
+
+        /// <summary>仲間に起こしてもらった：その場で起き上がる（残機は減らない）。</summary>
+        void OnRevived()
+        {
+            if (!health.Revive(session.Hazards.ReviveHealthFraction)) return;
+            awaitingRescue = false;
+            basePanel.OnDownedScreen = false;
+            basePanel.Visible = false;
+        }
+
+        /// <summary>倒れている間に仲間に引きずられた。</summary>
+        void OnDragged(Vector3 position)
+        {
+            if (!health.IsDown) return;
+            var delta = position - player.transform.position;
+            delta.y = 0f;
+            player.Controller.Move(Vector3.ClampMagnitude(delta, 0.8f));
         }
 
         /// <summary>台に入れた・倒れて失ったガラクタを片付ける。ネットワークの物はホストが消す。</summary>
@@ -207,6 +234,8 @@ namespace SpinTheScrap.World
             if (health != null) health.Downed -= OnPlayerDowned;
             Enemy.AnyDied -= OnEnemyDied;
             Enemy.SummonRequested = null;
+            NetPlayer.Revived -= OnRevived;
+            NetPlayer.DraggedTo -= OnDragged;
             Time.timeScale = 1f;
             AudioListener.pause = false;
         }
@@ -217,7 +246,16 @@ namespace SpinTheScrap.World
             interactor.ReleaseHeld();
             var lost = interactor.Inventory.TakeAll();
             foreach (var scrap in lost) DisposeScrap(scrap);
-            session.ReportDowned(lost.Count);
+            if (session.CoopRespawn)
+            {
+                // 協力プレイ：仲間が起こしてくれるのを待つ。あきらめたら残機が減る（Respawn）
+                awaitingRescue = true;
+                lostWhenDowned = lost.Count;
+            }
+            else
+            {
+                session.ReportDowned(lost.Count);
+            }
             basePanel.OnDownedScreen = true;
             basePanel.Visible = true;
         }
@@ -399,6 +437,7 @@ namespace SpinTheScrap.World
         void OnFloorStarted(int enemyBonus)
         {
             basePanel.OnDownedScreen = false;
+            awaitingRescue = false;
             DespawnNetworkEnemies();
             DespawnNetworkScrap();
             if (scrapRoot != null) Destroy(scrapRoot.gameObject);

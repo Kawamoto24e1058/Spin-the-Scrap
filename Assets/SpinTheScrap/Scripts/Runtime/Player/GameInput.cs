@@ -47,6 +47,8 @@ namespace SpinTheScrap.Player
         public static bool JumpPressed => KeyDown(Key.Space);
         public static bool RunHeld => KeyHeld(Key.LeftShift);
         public static bool InteractPressed => KeyDown(Key.E);
+        public static bool ReviveHeld => KeyHeld(Key.R);
+        public static bool DragPressed => KeyDown(Key.F);
         public static bool AttackHeld => Mouse.current != null && Mouse.current.leftButton.isPressed;
         public static bool ThrowPressed => Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame;
         public static bool ThrowHeld => Mouse.current != null && Mouse.current.rightButton.isPressed;
@@ -82,6 +84,8 @@ namespace SpinTheScrap.Player
         public static bool JumpPressed => Input.GetKeyDown(KeyCode.Space);
         public static bool RunHeld => Input.GetKey(KeyCode.LeftShift);
         public static bool InteractPressed => Input.GetKeyDown(KeyCode.E);
+        public static bool ReviveHeld => Input.GetKey(KeyCode.R);
+        public static bool DragPressed => Input.GetKeyDown(KeyCode.F);
         public static bool AttackHeld => Input.GetMouseButton(0);
         public static bool ThrowPressed => Input.GetMouseButtonDown(1);
         public static bool ThrowHeld => Input.GetMouseButton(1);

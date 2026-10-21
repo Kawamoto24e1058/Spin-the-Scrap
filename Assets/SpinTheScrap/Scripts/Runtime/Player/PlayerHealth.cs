@@ -67,6 +67,9 @@ namespace SpinTheScrap.Player
             return State.Heal(amount) > 0;
         }
 
+        /// <summary>協力プレイ：仲間に起こしてもらった。</summary>
+        public bool Revive(double fraction) => State != null && State.Revive(fraction);
+
         public void ResetHealth()
         {
             State?.Reset();

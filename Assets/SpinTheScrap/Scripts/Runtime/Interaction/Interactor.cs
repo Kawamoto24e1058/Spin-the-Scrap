@@ -89,8 +89,12 @@ namespace SpinTheScrap.Interaction
 
         Camera Cam => controller.ViewCamera;
 
+        /// <summary>このマシンのプレイヤーの手（協力プレイでほかの人の運ぶ力を計算するのにも使う）。</summary>
+        public static Interactor Local { get; private set; }
+
         void Awake()
         {
+            Local = this;
             controller = GetComponent<FirstPersonController>();
             inventory = GetComponent<Inventory>();
         }
@@ -322,9 +326,25 @@ namespace SpinTheScrap.Interaction
                 return;
             }
 
+            // 協力プレイで、ほかのマシンが物理を計算している物（特大など）は、引っ張りたい先だけを送る
+            if (!held.HasLocalPhysics)
+            {
+                held.RemoteCarry?.Invoke(heldLocalAnchor, target);
+                return;
+            }
+            body.AddForceAtPosition(CarryForce(body, held.Size, anchor, target), anchor, ForceMode.Force);
+        }
+
+        /// <summary>
+        /// つかんだ点 anchor を target へ引っ張るバネの力。力には上限があり、特大は 1 人だと持ち上がらない
+        /// （協力プレイのホストは、ほかの人の分もこれで計算して足す）。
+        /// </summary>
+        public Vector3 CarryForce(Rigidbody body, ScrapSize size, Vector3 anchor, Vector3 target)
+        {
+            var offset = target - anchor;
             // 小を手で持つ場合も大と同じ扱い（軽いのでほぼ追従する）
             var force = offset * (stiffness * body.mass / 8f) - body.GetPointVelocity(anchor) * (damping * body.mass / 8f);
-            if (held.Size == ScrapSize.Huge)
+            if (size == ScrapSize.Huge)
             {
                 // 持ち上げる力と引っ張る力の上限を分ける。1 人では持ち上がらないが、引きずることはできる
                 var horizontal = Vector3.ClampMagnitude(new Vector3(force.x, 0f, force.z), hugeDragForce);
@@ -334,7 +354,7 @@ namespace SpinTheScrap.Interaction
             {
                 force = Vector3.ClampMagnitude(force, largeMaxForce);
             }
-            body.AddForceAtPosition(force, anchor, ForceMode.Force);
+            return force;
         }
 
         float CurrentLoadKg()

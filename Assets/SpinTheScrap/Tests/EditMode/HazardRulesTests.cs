@@ -57,5 +57,18 @@ namespace SpinTheScrap.Tests
             Assert.AreEqual(100, health.Current);
             Assert.IsFalse(health.IsDown);
         }
+    
+        [Test]
+        public void DownedPlayerCanBeRevivedOnce()
+        {
+            var health = new HealthState(100);
+            Assert.IsFalse(health.Revive(0.3), "倒れていなければ起こせない");
+            health.Damage(150);
+            Assert.IsTrue(health.IsDown);
+            Assert.AreEqual(0, health.Heal(50), "倒れている間は回復しない");
+            Assert.IsTrue(health.Revive(new HazardRules().ReviveHealthFraction));
+            Assert.AreEqual(30, health.Current);
+            Assert.IsFalse(health.IsDown);
+        }
     }
 }

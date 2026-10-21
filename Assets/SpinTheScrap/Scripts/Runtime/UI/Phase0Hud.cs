@@ -105,6 +105,8 @@ namespace SpinTheScrap.UI
             if (interactor.InventoryFullFeedback) Line(s.Get("hud.inventory_full"), ref y);
 
             if (interactor.HoveredInteractable != null) Line(interactor.HoveredInteractable.Prompt(s), ref y);
+            var assist = Net.TeammateAssist.Instance;
+            if (assist != null && assist.Prompt != null) Line(assist.Prompt, ref y);
             if (combat != null && Time.time - combat.WeaponBrokeTime < 2f) Line(s.Get("hud.weapon_broke"), ref y);
             if (run.Objective.IsComplete && !run.IsOver) Line(s.Get("hud.objective_done"), ref y);
             DrawWeapon();

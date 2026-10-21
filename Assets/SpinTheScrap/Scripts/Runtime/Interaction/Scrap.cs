@@ -49,6 +49,15 @@ namespace SpinTheScrap.Interaction
         /// <summary>しまった（true）・取り出した（false）。協力プレイでは NetScrap がほかの人の画面でも隠す。</summary>
         public event Action<Scrap, bool> StowedChanged;
 
+        /// <summary>協力プレイ：このマシンで物理を計算しているか（NetScrap が設定。なければ常に true）。</summary>
+        public Func<bool> LocalPhysics { get; set; }
+        public bool HasLocalPhysics => LocalPhysics == null || LocalPhysics();
+        /// <summary>
+        /// 協力プレイ：物理を計算しているマシンへ「つかんだ点（この物から見た位置）をどこへ引っ張りたいか」を送る。
+        /// 特大を 2 人で持つと、ホストで 2 人分の力が足される。
+        /// </summary>
+        public Action<Vector3, Vector3> RemoteCarry { get; set; }
+
         /// <summary>インベントリにしまってある（見えず、当たり判定もない）。</summary>
         public bool IsStowed { get; private set; }
 

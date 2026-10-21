@@ -180,7 +180,7 @@ hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spar
 hud.push_cart,[E] 台車を押す,[E] Push the cart
 hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)
 hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
-hud.controls,左クリック 攻撃 / E 拾う / 右クリック長押し 投げる / G 落とす / 1-4 枠 / L 懐中電灯 / H 包帯 / Q 爆竹 / Tab スロット台,LMB Attack / E Pick up / Hold RMB Throw / G Drop / 1-4 Slot / L Flashlight / H Bandage / Q Firecracker / Tab Slot machine
+hud.controls,左クリック 攻撃 / E 拾う / 右クリック長押し 投げる / G 落とす / 1-4 枠 / L 懐中電灯 / H 包帯 / Q 爆竹 / R 仲間を起こす / F 引きずる / Tab スロット台,LMB Attack / E Pick up / Hold RMB Throw / G Drop / 1-4 Slot / L Flashlight / H Bandage / Q Firecracker / R Revive / F Drag / Tab Slot machine
 # --- 拠点メニュー ---
 base.status,地下 {0}/{1}階  残機 {2}  メダル {3},Floor B{0}/{1}  Lives {2}  Medals {3}
 base.haul,台に入れたガラクタ,Scrap in the machine
@@ -211,3 +211,8 @@ base.objective_pending,攻略条件を満たすとエレベーターが動く,Th
 base.next_floor_message,地下{0}階に着いた。,Arrived at floor B{0}.
 base.objective_done,攻略条件を満たした！エレベーターが動く。,Objective complete! The elevator is running.
 base.downed,倒れた。持っていたガラクタ{0}個を失った。残機 {1}。,You went down. Lost {0} scrap you were carrying. {1} lives left.
+hud.revive,[R 長押し] 仲間を起こす  [F] 引きずる,[Hold R] Revive your teammate  [F] Drag
+hud.reviving,仲間を起こしています… {0}%,Reviving your teammate... {0}%
+hud.dragging,[F] 仲間を離す  [R 長押し] 起こす,[F] Let go  [Hold R] Revive
+base.wait_rescue,倒れた。仲間がそばで R を押し続けると起こしてもらえる（残機は減らない）。,You are down. A teammate can revive you by holding R next to you (no life lost).
+base.give_up,あきらめて入口で起き上がる（残機 {0} → 1 減る）,Give up and get up at the entrance (lives {0} → lose 1)

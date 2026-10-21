@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -13,6 +14,7 @@ namespace SpinTheScrap.Net
     /// ネットワークで配るガラクタ（ホストが置く）。位置は NetworkTransform（持ち主の権威）。
     /// 誰も持っていない間はホストが物理を計算し、拾った人が持ち主になってその人のマシンで動かす。
     /// しまった物は、ほかの人の画面でも見えなくする。台に入れた物はホストが消す。
+    /// 特大は持ち主を移さずホストが計算し、クライアントは引っ張りたい先を送る（2 人の力が足されて持ち上がる）。
     /// </summary>
     public sealed class NetScrap : NetworkBehaviour
     {
@@ -20,6 +22,19 @@ namespace SpinTheScrap.Net
         readonly SyncVar<bool> stowed = new SyncVar<bool>();
 
         Scrap scrap;
+        float nextCarrySendTime;
+
+        /// <summary>ホスト：ほかの人が引っ張っている先（つかんだ点・目標・届いた時刻）。</summary>
+        sealed class CarryCommand
+        {
+            public Vector3 LocalAnchor;
+            public Vector3 Target;
+            public float Time;
+        }
+
+        readonly Dictionary<int, CarryCommand> carriers = new Dictionary<int, CarryCommand>();
+        const float CarryTimeout = 0.25f;
+        const float CarrySendInterval = 0.05f;
 
         /// <summary>シンボルの定義を引く（Phase0Bootstrap が設定する）。</summary>
         public static Func<string, SymbolDefinition> Lookup { get; set; }
@@ -61,6 +76,8 @@ namespace SpinTheScrap.Net
 
         void Hook()
         {
+            scrap.LocalPhysics = () => !IsSpawned || HasPhysicsAuthority;
+            scrap.RemoteCarry = SendCarry;
             scrap.Claimed += OnClaimed;
             scrap.StowedChanged += OnStowedChanged;
         }
@@ -87,7 +104,50 @@ namespace SpinTheScrap.Net
                 if (Owner.IsValid && !Owner.IsLocalClient) RemoveOwnership();
                 return;
             }
+            if (scrap.Size == ScrapSize.Huge) return; // 特大はホストが動かす（2 人で持てるように）
             if (!IsOwner) ClaimRpc();
+        }
+
+        void SendCarry(Vector3 localAnchor, Vector3 target)
+        {
+            if (!IsSpawned || Time.unscaledTime < nextCarrySendTime) return;
+            nextCarrySendTime = Time.unscaledTime + CarrySendInterval;
+            CarryRpc(localAnchor, target);
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        void CarryRpc(Vector3 localAnchor, Vector3 target, NetworkConnection caller = null)
+        {
+            if (caller == null) return;
+            if (!carriers.TryGetValue(caller.ClientId, out var command)) carriers[caller.ClientId] = command = new CarryCommand();
+            command.LocalAnchor = localAnchor;
+            command.Target = target;
+            command.Time = Time.time;
+        }
+
+        /// <summary>ホスト：ほかの人の運ぶ力を足す（このマシンの人の力は Interactor が足している）。</summary>
+        void FixedUpdate()
+        {
+            if (carriers.Count == 0 || scrap == null || !IsServerStarted || !HasPhysicsAuthority || Interactor.Local == null) return;
+            var body = scrap.Body;
+            foreach (var command in carriers.Values)
+            {
+                if (Time.time - command.Time > CarryTimeout) continue;
+                var anchor = scrap.transform.TransformPoint(command.LocalAnchor);
+                body.AddForceAtPosition(Interactor.Local.CarryForce(body, scrap.Size, anchor, command.Target), anchor, ForceMode.Force);
+            }
+        }
+
+        /// <summary>ホスト：いまほかの人が引っ張っている数（確認用）。</summary>
+        public int RemoteCarriers
+        {
+            get
+            {
+                int count = 0;
+                foreach (var command in carriers.Values)
+                    if (Time.time - command.Time <= CarryTimeout) count++;
+                return count;
+            }
         }
 
         [ServerRpc(RequireOwnership = false)]

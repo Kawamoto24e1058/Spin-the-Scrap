@@ -10,6 +10,13 @@ namespace SpinTheScrap.Core
     {
         public double MaxHealth = 100;
 
+        /// <summary>協力プレイ：倒れた仲間を起こすのに、そばで押し続ける時間 (s)。</summary>
+        public double ReviveSeconds = 2.5;
+        /// <summary>起こしてもらったときの体力（最大体力に対する割合）。</summary>
+        public double ReviveHealthFraction = 0.3;
+        /// <summary>起こす・引きずるのに届く距離 (m)。</summary>
+        public double ReviveReach = 2.2;
+
         /// <summary>
         /// この速さ (m/s) 以下の着地では傷つかない。プレイヤーの重力は 20m/s² なので、
         /// 中 2 階（2m）から飛び降りると約 8.9m/s（無傷）、4m から落ちると約 12.6m/s。
@@ -85,6 +92,15 @@ namespace SpinTheScrap.Core
         }
 
         public void Reset() => Current = Max;
+
+        /// <summary>倒れているところを仲間に起こしてもらう。最大体力の fraction で起き上がる。起きたら true。</summary>
+        public bool Revive(double fraction)
+        {
+            if (fraction <= 0 || fraction > 1) throw new ArgumentOutOfRangeException(nameof(fraction));
+            if (!IsDown) return false;
+            Current = Math.Max(1, Math.Floor(Max * fraction));
+            return true;
+        }
 
         /// <summary>回復する。倒れていたら回復しない。実際に回復した量を返す。</summary>
         public double Heal(double amount)
