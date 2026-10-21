@@ -4,7 +4,9 @@
     "references": [
         "SpinTheScrap.Core",
         "Unity.InputSystem",
-        "FishNet.Runtime"
+        "FishNet.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

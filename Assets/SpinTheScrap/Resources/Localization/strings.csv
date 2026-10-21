@@ -216,3 +216,19 @@ hud.reviving,仲間を起こしています… {0}%,Reviving your teammate... {0
 hud.dragging,[F] 仲間を離す  [R 長押し] 起こす,[F] Let go  [Hold R] Revive
 base.wait_rescue,倒れた。仲間がそばで R を押し続けると起こしてもらえる（残機は減らない）。,You are down. A teammate can revive you by holding R next to you (no life lost).
 base.give_up,あきらめて入口で起き上がる（残機 {0} → 1 減る）,Give up and get up at the entrance (lives {0} → lose 1)
+panel.floor,地下 {0} / {1}階,Floor B{0} / {1}
+panel.lives,残機 {0},Lives {0}
+panel.medals,メダル {0},Medals {0}
+panel.spinning,リールが回っている…,The reels are spinning...
+panel.reading,合計 {0}　ライン {1}本　系統 {2}　{3},Total {0}   {1} lines   type {2}   {3}
+panel.line,ライン{0}　×{1}　{2}　+{3},Line {0}   ×{1}   {2}   +{3}
+panel.corners,四隅　+{0},Corners   +{0}
+panel.haul_empty,台の前で E を押すと、持っている物と台の前の床に置いた物が入る。,Press E at a machine to feed what you carry and what lies on the floor in front of it.
+cabinet.jackpot,大当たり！,JACKPOT!
+cabinet.total,合計 {0},TOTAL {0}
+cabinet.cost,1回 {0}枚　手持ち {1}枚,Spin {0}   You have {1}
+machine.Weapon.short,武器,Weapon
+machine.Perk.short,強化,Perk
+machine.Mod.short,改造,Mod
+machine.Tool.short,道具,Tool
+panel.spin_at_machine,{0}は、その台の前でレバーを引く。ここではリールの中身を見て、ガラクタを入れられる。,Pull the lever at the {0} itself. Here you can view its reel and add scrap to it.

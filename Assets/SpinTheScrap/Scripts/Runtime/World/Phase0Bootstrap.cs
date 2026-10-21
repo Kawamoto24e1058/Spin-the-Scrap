@@ -8,6 +8,8 @@ using SpinTheScrap.Player;
 using SpinTheScrap.Session;
 using SpinTheScrap.UI;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace SpinTheScrap.World
 {
@@ -38,10 +40,13 @@ namespace SpinTheScrap.World
         Rng spawnRng;
         bool panelWasVisible;
         bool wasOver;
+        bool flashlightWasOn;
+        CabinetContext cabinetContext;
         // 協力プレイ：倒れて仲間を待っている（あきらめたら残機が減る）
         bool awaitingRescue;
         int lostWhenDowned;
         PlayerCombat combat;
+        ViewFocus viewFocus;
         float floorStartTime;
         float nextCrawlerTime;
         readonly List<Enemy> crawlers = new List<Enemy>();
@@ -73,6 +78,14 @@ namespace SpinTheScrap.World
             session.Spun += OnSpun;
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
+            basePanel.OutcomeHidden = () => basePanel.Docked && currentCabinet != null && currentCabinet.View.IsSpinning;
+            cabinetContext = new CabinetContext
+            {
+                Strings = session.Strings,
+                Symbol = id => session.Content.GetSymbol(id),
+                Reel = kind => session.Run.ReelOf(kind),
+                Status = kind => session.Strings.Format("cabinet.cost", session.Medals(session.Run.CostOf(kind)), session.Medals(session.Run.Medals)),
+            };
             gameObject.AddComponent<TeammateAssist>().Init(player, health, session.Hazards, session.Strings);
             NetPlayer.Revived += OnRevived;
             NetPlayer.DraggedTo += OnDragged;
@@ -183,10 +196,8 @@ namespace SpinTheScrap.World
             awaitingRescue = false;
             basePanel.OnDownedScreen = false;
             health.ResetHealth();
-            player.Controller.enabled = false;
             var offset = mode == NetMode.Client ? Vector3.right * 1.5f : Vector3.zero;
-            player.transform.SetPositionAndRotation(playerSpawn + offset, Quaternion.identity);
-            player.Controller.enabled = true;
+            player.Teleport(playerSpawn + offset, Quaternion.identity);
         }
 
         /// <summary>仲間に起こしてもらった：その場で起き上がる（残機は減らない）。</summary>
@@ -371,7 +382,11 @@ namespace SpinTheScrap.World
             wasOver = session.Run.IsOver;
             // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
             if (health.IsDown) basePanel.Visible = true;
-            else if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
+            else if (GameInput.BaseMenuPressed)
+            {
+                basePanel.Visible = !basePanel.Visible;
+                currentCabinet = null; // Tab で開いたメニューは台から離れていても使える（台は映さない）
+            }
             if (GameInput.EscapePressed)
             {
                 if (basePanel.Visible && !health.IsDown) basePanel.Visible = false;
@@ -381,6 +396,24 @@ namespace SpinTheScrap.World
             {
                 SetCursorLocked(true);
                 return; // ロックし直したクリックで物を拾わない
+            }
+
+            // 台の前で開いたメニューは右に寄せて、カメラで台を映す。閉じたら（Tab で開き直したときも）戻す
+            if (!basePanel.Visible || health.IsDown) currentCabinet = null;
+            if (currentCabinet != null) viewFocus.Focus(currentCabinet.transform, new Vector3(-0.85f, 1.42f, 2.2f), new Vector3(-0.85f, 1.3f, 0f));
+            else viewFocus.Release();
+            basePanel.Docked = currentCabinet != null;
+            basePanel.CabinetKind = currentCabinet != null ? currentCabinet.Kind : (MachineKind?)null;
+            // 台を映している間は懐中電灯を消す（リールの窓が白く飛ぶ）。閉じたら元に戻す
+            if (basePanel.Docked && flashlight.IsOn)
+            {
+                flashlight.SetOn(false);
+                flashlightWasOn = true;
+            }
+            else if (!basePanel.Docked && flashlightWasOn)
+            {
+                flashlight.SetOn(true);
+                flashlightWasOn = false;
             }
 
             // メニューを開いたらカーソルを出し、閉じたら（Tab・Esc・「次の潜行へ」のどれでも）戻す
@@ -464,9 +497,7 @@ namespace SpinTheScrap.World
             PlaceMachines(run.Floor, FloorRng(session.RunSeed, run.Floor, session.Attempt, 2));
             health.ResetHealth();
 
-            player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
-            player.transform.SetPositionAndRotation(playerSpawn, Quaternion.identity);
-            player.Controller.enabled = true;
+            player.Teleport(playerSpawn, Quaternion.identity);
             PublishFloor();
         }
 
@@ -582,6 +613,33 @@ namespace SpinTheScrap.World
             RenderSettings.fogEndDistance = 32f;
 
             foreach (var light in FindObjectsByType<Light>()) light.gameObject.SetActive(false);
+            BuildPostProcessing();
+        }
+
+        /// <summary>画面全体の仕上げ：光る物のにじみ（ブルーム）、周辺を暗く、色の調子。</summary>
+        static void BuildPostProcessing()
+        {
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            var bloom = profile.Add<Bloom>(true);
+            bloom.threshold.Override(0.95f);
+            bloom.intensity.Override(1.2f);
+            bloom.scatter.Override(0.7f);
+            var tonemapping = profile.Add<Tonemapping>(true);
+            tonemapping.mode.Override(TonemappingMode.Neutral);
+            var color = profile.Add<ColorAdjustments>(true);
+            color.postExposure.Override(0.25f);
+            color.contrast.Override(10f);
+            color.saturation.Override(-6f);
+            var vignette = profile.Add<Vignette>(true);
+            vignette.intensity.Override(0.28f);
+            vignette.smoothness.Override(0.45f);
+            var grain = profile.Add<FilmGrain>(true);
+            grain.intensity.Override(0.12f);
+
+            var volume = new GameObject("Post processing").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 1f;
+            volume.sharedProfile = profile;
         }
 
         // ---- スロット台とエレベーター ----
@@ -597,7 +655,7 @@ namespace SpinTheScrap.World
             var kinds = new List<MachineKind> { MachineKind.Weapon, MachineKind.Perk, MachineKind.Tool };
             if (bossFloor) kinds.Add(MachineKind.Mod);
             for (int i = 0; i < kinds.Count; i++)
-                MachineCabinet.Create(root, new Vector3(-4.5f + i * 3f, 0f, -11.3f), Vector3.forward, kinds[i], UseMachine);
+                MachineCabinet.Create(root, new Vector3(-4.5f + i * 3f, 0f, -11.3f), Vector3.forward, kinds[i], cabinetContext, UseMachine);
 
             Elevator.Create(root, new Vector3(9.2f, 0f, -9.2f), Vector3.left, () => session.Run.Objective.IsComplete && !session.Run.IsOver,
                 strings => session.Run.IsLastFloor ? strings.Get("hud.elevator_exit") : strings.Format("hud.elevator_ready", session.Run.Floor + 1),
@@ -608,14 +666,14 @@ namespace SpinTheScrap.World
                 // ボスの部屋の奥に「最後の台」：ボスに追われながら回しに行くかどうかの賭け
                 var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
                 var back = FacilityBuilder.RoomCenter(lair.Plan) + new Vector3(0f, 0f, 11.3f);
-                MachineCabinet.Create(root, back + Vector3.left * 2f, Vector3.back, MachineKind.Mod, UseMachine);
-                MachineCabinet.Create(root, back + Vector3.right * 2f, Vector3.back, MachineKind.Perk, UseMachine);
+                MachineCabinet.Create(root, back + Vector3.left * 2f, Vector3.back, MachineKind.Mod, cabinetContext, UseMachine);
+                MachineCabinet.Create(root, back + Vector3.right * 2f, Vector3.back, MachineKind.Perk, cabinetContext, UseMachine);
                 return;
             }
             var deepest = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance).OrderByDescending(r => r.Plan.Depth).FirstOrDefault();
             if (deepest == null) return;
             var extra = rng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;
-            MachineCabinet.Create(root, FacilityBuilder.RoomCenter(deepest.Plan) + new Vector3(8f, 0f, -10.3f), Vector3.forward, extra, UseMachine);
+            MachineCabinet.Create(root, FacilityBuilder.RoomCenter(deepest.Plan) + new Vector3(8f, 0f, -10.3f), Vector3.forward, extra, cabinetContext, UseMachine);
         }
 
         /// <summary>スロット台を使う：持っている物と台の前に置いた物をすべて入れて、その台のメニューを開く。</summary>
@@ -637,6 +695,9 @@ namespace SpinTheScrap.World
         {
             var position = currentCabinet != null ? currentCabinet.transform.position : player.transform.position;
             var rules = session.Run.MachineRules;
+            // 台の前なら台のリールを回して見せる（当たりの音は止まったときに台が鳴らす）
+            if (currentCabinet != null) currentCabinet.View.Play(outcome);
+            else if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Audio.Sfx.Play2D(Audio.SfxClips.Win, 0.6f);
             NoiseEvents.Emit(position, (float)(outcome.Reading.Jackpot ? rules.JackpotNoiseRadius : rules.SpinNoiseRadius));
         }
 
@@ -666,16 +727,21 @@ namespace SpinTheScrap.World
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = RenderSettings.fogColor;
             camGo.AddComponent<AudioListener>();
+            var cameraData = cam.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             flashlight = camGo.AddComponent<Flashlight>();
 
             player = go.AddComponent<FirstPersonController>();
             player.SetCamera(cam);
+            player.Frozen = true; // 階層ができるまで（始める前の画面の間）止めておく
             go.AddComponent<Inventory>();
             interactor = go.AddComponent<Interactor>();
             health = go.AddComponent<PlayerHealth>();
             go.AddComponent<PlayerNoise>();
             combat = go.AddComponent<PlayerCombat>();
             go.AddComponent<WeaponViewModel>();
+            viewFocus = go.AddComponent<ViewFocus>();
         }
     }
 }

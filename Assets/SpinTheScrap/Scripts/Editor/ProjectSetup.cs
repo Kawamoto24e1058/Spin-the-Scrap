@@ -16,6 +16,8 @@ namespace SpinTheScrap.EditorTools
         const string PipelinePath = SettingsFolder + "/URP.asset";
         const string RendererPath = SettingsFolder + "/URP_Renderer.asset";
         const string TemplateMaterialPath = "Assets/SpinTheScrap/Resources/" + MaterialUtil.TemplateResourcePath + ".mat";
+        const string EmissiveMaterialPath = "Assets/SpinTheScrap/Resources/" + MaterialUtil.EmissiveResourcePath + ".mat";
+        const string TextMaterialPath = "Assets/SpinTheScrap/Resources/" + MaterialUtil.TextResourcePath + ".mat";
         const string DefaultPostProcessDataPath = "Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset";
 
         /// <summary>PlayerSettings.activeInputHandler の値。0 = Input Manager（旧）、1 = Input System、2 = 両方。</summary>
@@ -60,6 +62,31 @@ namespace SpinTheScrap.EditorTools
             QualitySettings.SetQualityLevel(current, false);
 
             CreateTemplateMaterial(pipeline);
+            CreateEmissiveMaterial(pipeline);
+            CreateTextMaterial();
+        }
+
+        /// <summary>発光を有効にした Lit。これがあると発光の版のシェーダーがビルドに残る。</summary>
+        static void CreateEmissiveMaterial(UniversalRenderPipelineAsset pipeline)
+        {
+            if (AssetDatabase.LoadAssetAtPath<Material>(EmissiveMaterialPath) != null) return;
+            var shader = pipeline.defaultShader;
+            if (shader == null) return;
+            var mat = new Material(shader);
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            mat.SetColor(MaterialUtil.EmissionColorId, Color.white);
+            mat.SetFloat(SmoothnessId, 0.3f);
+            AssetDatabase.CreateAsset(mat, EmissiveMaterialPath);
+        }
+
+        /// <summary>3D の文字（TextMesh）の GUI/Text Shader をビルドに含める。</summary>
+        static void CreateTextMaterial()
+        {
+            if (AssetDatabase.LoadAssetAtPath<Material>(TextMaterialPath) != null) return;
+            var shader = Shader.Find("GUI/Text Shader");
+            if (shader == null) return;
+            AssetDatabase.CreateAsset(new Material(shader), TextMaterialPath);
         }
 
         /// <summary>MaterialUtil が複製する元のマテリアル。Resources に置くとシェーダーがビルドに含まれる。</summary>

@@ -49,6 +49,15 @@ namespace SpinTheScrap.World
             { "broken_vending_machine", new Look(PrimitiveType.Cube, new Vector3(1.0f, 1.8f, 0.8f), new Color(0.6f, 0.15f, 0.15f)) },
         };
 
+        /// <summary>見た目（形・大きさ・色）。スロット台のリールに小さな模型を並べるのにも使う。</summary>
+        public static void LookOf(SymbolDefinition def, out PrimitiveType shape, out Vector3 scale, out Color color)
+        {
+            var look = Looks.TryGetValue(def.Id, out var l) ? l : DefaultLook(def);
+            shape = look.Shape;
+            scale = look.Scale;
+            color = look.Color;
+        }
+
         /// <summary>
         /// 協力プレイ用：渡した物（NetScrap のプレハブ）を本体にして、見た目は子に作る。
         /// 本体の大きさを 1 のままにしておくため（NetworkTransform が位置と向きだけを配る）。

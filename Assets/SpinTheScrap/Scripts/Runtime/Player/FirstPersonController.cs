@@ -36,6 +36,8 @@ namespace SpinTheScrap.Player
         float verticalVelocity;
 
         public Camera ViewCamera => viewCamera;
+        /// <summary>カメラの本来の向き（上下の向き）。ViewFocus が台を映したあと戻すのに使う。</summary>
+        public Quaternion RestCameraRotation => Quaternion.Euler(pitch, 0f, 0f);
         public CharacterController Controller => controller;
         /// <summary>移動・視点の入力を受け付けるか（拠点メニュー表示中などは false）。</summary>
         public bool InputEnabled { get; set; } = true;
@@ -69,10 +71,31 @@ namespace SpinTheScrap.Player
             if (viewCamera == null) viewCamera = GetComponentInChildren<Camera>();
         }
 
+        /// <summary>止めておく（始める前の画面で、床のないところに落ち続けないように）。</summary>
+        public bool Frozen { get; set; }
+
         void Update()
         {
+            if (Frozen)
+            {
+                verticalVelocity = 0f;
+                return;
+            }
             if (InputEnabled) Look();
             Move();
+        }
+
+        /// <summary>
+        /// 瞬間移動する（階層の開始・起き上がり）。落ちている速さも消す。消さないと、移動先で着地した瞬間に
+        /// それまでの落下の速さで大きな落下ダメージを受ける。
+        /// </summary>
+        public void Teleport(Vector3 position, Quaternion rotation)
+        {
+            controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
+            transform.SetPositionAndRotation(position, rotation);
+            controller.enabled = true;
+            verticalVelocity = 0f;
+            Frozen = false;
         }
 
         void Look()
