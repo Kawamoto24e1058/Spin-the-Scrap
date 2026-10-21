@@ -107,6 +107,6 @@ namespace SpinTheScrap.Core
 
         /// <summary>素手（武器がないとき）。弱いが壊れない。</summary>
         public static readonly WeaponDefinition Fists =
-            new WeaponDefinition("fists", WeaponKind.Melee, SymbolTag.None, 0, damage: 8, interval: 0.45, range: 1.8, capacity: int.MaxValue);
+            new WeaponDefinition("fists", WeaponKind.Melee, SymbolTag.None, 0, damage: 8, interval: 0.45, range: 2.5, capacity: int.MaxValue);
     }
 }

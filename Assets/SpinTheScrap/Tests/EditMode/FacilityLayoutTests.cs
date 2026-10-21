@@ -113,6 +113,19 @@ namespace SpinTheScrap.Tests
             Assert.Less(LootTable.ScrapCountFor(RoomKind.Entrance, 0), LootTable.ScrapCountFor(RoomKind.Hall, 1));
         }
 
+        [Test]
+        public void BossFloorHasFixedShapeWithLairAtTheBack()
+        {
+            var layout = FacilityLayout.CreateBossFloor();
+            Assert.AreEqual(Describe(layout), Describe(FacilityLayout.CreateBossFloor()), "毎回同じ形");
+            Assert.AreEqual(RoomKind.Entrance, layout.Entrance.Kind);
+            var lair = layout.Rooms.Single(r => r.Kind == RoomKind.BossLair);
+            Assert.AreEqual(2, layout.Path(layout.Entrance, lair).Count - 1, "入口から 2 部屋先");
+            Assert.AreEqual(3, layout.Rooms.Count(r => r.Kind == RoomKind.Arena));
+            foreach (var room in layout.Rooms)
+                Assert.IsNotEmpty(layout.Path(layout.Entrance, room), "全部屋に行ける");
+        }
+
         static string Describe(FacilityLayout layout) =>
             string.Join(";", layout.Rooms.Select(r =>
                 r.X + "," + r.Y + ":" + r.Kind + ":" + string.Concat(AllDirections.Select(d => r.HasDoor(d) ? "1" : "0"))));

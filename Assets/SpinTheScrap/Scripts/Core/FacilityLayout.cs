@@ -13,6 +13,10 @@ namespace SpinTheScrap.Core
         Storage,
         /// <summary>中 2 階と階段・坂がある部屋。重い物を持って上り下りする。</summary>
         Loft,
+        /// <summary>ボス階層の戦場。太い柱と低い壁が並び、巨体を柱にぶつけて隙を作る。</summary>
+        Arena,
+        /// <summary>ボス階層のいちばん奥。ボスがいて、奥に最後のスロット台がある。</summary>
+        BossLair,
     }
 
     public enum Direction
@@ -138,6 +142,30 @@ namespace SpinTheScrap.Core
             return layout;
         }
 
+        /// <summary>
+        /// ボス階層の決まった間取り：入口 → 中央の戦場 → 奥のボスの部屋。中央の左右にも戦場がある。
+        /// </summary>
+        public static FacilityLayout CreateBossFloor()
+        {
+            var layout = new FacilityLayout();
+            var entrance = layout.Add(0, 0, RoomKind.Entrance, 0);
+            var center = layout.Add(0, 1, RoomKind.Arena, 1);
+            var west = layout.Add(-1, 1, RoomKind.Arena, 2);
+            var east = layout.Add(1, 1, RoomKind.Arena, 2);
+            var lair = layout.Add(0, 2, RoomKind.BossLair, 2);
+            Connect(entrance, center, Direction.North);
+            Connect(center, west, Direction.West);
+            Connect(center, east, Direction.East);
+            Connect(center, lair, Direction.North);
+            return layout;
+        }
+
+        static void Connect(RoomPlan from, RoomPlan to, Direction dir)
+        {
+            from.SetDoor(dir);
+            to.SetDoor(Opposite(dir));
+        }
+
         RoomPlan Add(int x, int y, RoomKind kind, int depth)
         {
             var room = new RoomPlan(x, y) { Kind = kind, Depth = depth };
@@ -186,6 +214,8 @@ namespace SpinTheScrap.Core
         public static int ScrapCountFor(RoomKind kind, int depth)
         {
             if (kind == RoomKind.Entrance) return 2;
+            // ボス階層では、ガラクタはほとんど拾えない
+            if (kind == RoomKind.Arena || kind == RoomKind.BossLair) return 1;
             return Math.Min(4 + depth, 7);
         }
     }

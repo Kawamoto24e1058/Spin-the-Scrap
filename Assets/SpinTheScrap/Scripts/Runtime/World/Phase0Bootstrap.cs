@@ -224,7 +224,10 @@ namespace SpinTheScrap.World
             if (facility != null) Destroy(facility.Root.gameObject);
 
             var run = session.Run;
-            var layout = FacilityLayout.Generate(spawnRng.NextULong(), run.Config.RoomCountFor(run.Floor));
+            // ボス階層は決まった間取り、通常の階は自動生成
+            var layout = run.IsBossFloor
+                ? FacilityLayout.CreateBossFloor()
+                : FacilityLayout.Generate(spawnRng.NextULong(), run.Config.RoomCountFor(run.Floor));
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
@@ -296,15 +299,17 @@ namespace SpinTheScrap.World
                 .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).ToList();
             if (rooms.Count == 0) return;
 
-            // ボス階層：いちばん奥の部屋に目の見えない巨体（ボス専用の階層を作るまでの仮）
+            // ボス階層：奥の部屋に目の見えない巨体だけ（ほかの敵は出さない）
             if (run.IsBossFloor)
             {
-                Enemy.Spawn(EnemyKind.Brute, run.Floor, facility.Root, FacilityBuilder.RoomCenter(rooms[0].Plan),
+                var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
+                Enemy.Spawn(EnemyKind.Brute, run.Floor, facility.Root, FacilityBuilder.RoomCenter(lair.Plan),
                     rules, facility, player, health, flashlight, spawnRng.NextULong());
+                return;
             }
 
             int count = rules.CountFor(run.Floor, enemyBonus, facility.Rooms.Count);
-            foreach (var room in rooms.Skip(run.IsBossFloor ? 1 : 0).Take(count))
+            foreach (var room in rooms.Take(count))
             {
                 var position = FacilityBuilder.RoomCenter(room.Plan) + new Vector3(3f, 0f, 3f);
                 Enemy.Spawn(EnemyKind.Lurker, run.Floor, facility.Root, position, rules, facility, player, health, flashlight, spawnRng.NextULong());
@@ -367,7 +372,15 @@ namespace SpinTheScrap.World
                 strings => session.Run.IsLastFloor ? strings.Get("hud.elevator_exit") : strings.Format("hud.elevator_ready", session.Run.Floor + 1),
                 RideElevator);
 
-            if (session.Run.IsBossFloor) return;
+            if (session.Run.IsBossFloor)
+            {
+                // ボスの部屋の奥に「最後の台」：ボスに追われながら回しに行くかどうかの賭け
+                var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
+                var back = FacilityBuilder.RoomCenter(lair.Plan) + new Vector3(0f, 0f, 11.3f);
+                MachineCabinet.Create(root, back + Vector3.left * 2f, Vector3.back, MachineKind.Mod, UseMachine);
+                MachineCabinet.Create(root, back + Vector3.right * 2f, Vector3.back, MachineKind.Perk, UseMachine);
+                return;
+            }
             var deepest = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance).OrderByDescending(r => r.Plan.Depth).FirstOrDefault();
             if (deepest == null) return;
             var extra = spawnRng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;

@@ -102,6 +102,8 @@ namespace SpinTheScrap.World
                     case RoomKind.Hall: BuildHall(root, room); break;
                     case RoomKind.Storage: BuildStorage(root, room); break;
                     case RoomKind.Loft: BuildLoft(root, room); break;
+                    case RoomKind.Arena: BuildArena(root, room); break;
+                    case RoomKind.BossLair: BuildBossLair(root, room); break;
                 }
                 // 部屋ごとの置き場はローカル座標で書いているので、ワールド座標に直す
                 for (int i = 0; i < room.Spots.Count; i++)
@@ -225,6 +227,33 @@ namespace SpinTheScrap.World
             Raised(room, 1f, -8f, -6f, -6.5f, -6f);
             room.HugeSpot = new Vector3(-5f, 0f, 0f);
             room.PuddleSpot = new Vector3(0f, 0f, -5f);
+        }
+
+        /// <summary>ボス階層の戦場。太い柱の陰に隠れ、巨体を柱にぶつけてひるませる。ドアの前の十字の通路は空けておく。</summary>
+        static void BuildArena(Transform root, BuiltRoom room)
+        {
+            foreach (float x in new[] { -6f, 6f })
+                foreach (float z in new[] { -6f, 6f })
+                    Block(root, "Pillar", new Vector3(x, 2f, z), new Vector3(1.6f, 4f, 1.6f), WallColor);
+            Block(root, "Cover A", new Vector3(-4.5f, 0.5f, 3.5f), new Vector3(3f, 1f, 0.4f), PropColor);
+            Block(root, "Cover B", new Vector3(4.5f, 0.5f, -3.5f), new Vector3(3f, 1f, 0.4f), PropColor);
+
+            PointLight(root, new Vector3(-6f, 3.6f, 0f), WarmColor, 9f, 4f);
+            PointLight(root, new Vector3(6f, 3.6f, 0f), WarmColor, 9f, 4f);
+
+            Floor(room, -9f, 9f, 9f, -9f);
+            room.PuddleSpot = new Vector3(-6f, 0f, -9.5f);
+        }
+
+        /// <summary>ボスの部屋。奥の壁際に最後のスロット台を置く（Phase0Bootstrap）。</summary>
+        static void BuildBossLair(Transform root, BuiltRoom room)
+        {
+            foreach (float x in new[] { -7f, 7f })
+                foreach (float z in new[] { -4f, 5f })
+                    Block(root, "Pillar", new Vector3(x, 2f, z), new Vector3(1.8f, 4f, 1.8f), WallColor);
+            PointLight(root, new Vector3(0f, 3.7f, 0f), new Color(1f, 0.3f, 0.2f), 14f, 6f);
+            PointLight(root, new Vector3(0f, 3.5f, 9.5f), new Color(1f, 0.85f, 0.6f), 6f, 4f);
+            Floor(room, -9f, -9f, 9f, -9f);
         }
 
         // ---- ハザード ----

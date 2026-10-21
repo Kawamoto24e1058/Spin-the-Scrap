@@ -86,17 +86,17 @@ namespace SpinTheScrap.Core
         {
             return new WeaponCatalog(new[]
             {
-                new WeaponDefinition("pipe", WeaponKind.Melee, SymbolTag.Metal, 1, damage: 20, interval: 0.55, range: 2.2, capacity: 40),
+                new WeaponDefinition("pipe", WeaponKind.Melee, SymbolTag.Metal, 1, damage: 20, interval: 0.55, range: 3.0, capacity: 40),
                 new WeaponDefinition("nail_gun", WeaponKind.Ranged, SymbolTag.Metal, 2, damage: 14, interval: 0.18, range: 25, capacity: 60),
                 new WeaponDefinition("rivet_cannon", WeaponKind.Ranged, SymbolTag.Metal, 3, damage: 45, interval: 0.6, range: 35, capacity: 24) { Pierce = true },
-                new WeaponDefinition("taser", WeaponKind.Melee, SymbolTag.Electric, 1, damage: 12, interval: 0.5, range: 2.2, capacity: 30) { StunChance = 0.6 },
+                new WeaponDefinition("taser", WeaponKind.Melee, SymbolTag.Electric, 1, damage: 12, interval: 0.5, range: 2.9, capacity: 30) { StunChance = 0.6 },
                 new WeaponDefinition("arc_gun", WeaponKind.Ranged, SymbolTag.Electric, 2, damage: 16, interval: 0.4, range: 18, capacity: 40) { Chain = 2, StunChance = 0.2 },
                 new WeaponDefinition("arc_gun_mk2", WeaponKind.Ranged, SymbolTag.Electric, 3, damage: 24, interval: 0.35, range: 22, capacity: 50) { Chain = 4, StunChance = 0.3 },
                 new WeaponDefinition("firework_tube", WeaponKind.Ranged, SymbolTag.Toy, 1, damage: 40, interval: 1.1, range: 25, capacity: 8) { ExplosionRadius = 3 },
                 new WeaponDefinition("firework_tube_mk2", WeaponKind.Ranged, SymbolTag.Toy, 3, damage: 70, interval: 1.0, range: 30, capacity: 12) { ExplosionRadius = 4.5 },
-                new WeaponDefinition("cursed_cleaver", WeaponKind.Melee, SymbolTag.Curse, 1, damage: 55, interval: 0.7, range: 2.4, capacity: 40) { SelfDamage = 3 },
-                new WeaponDefinition("cursed_cleaver_mk2", WeaponKind.Melee, SymbolTag.Curse, 2, damage: 85, interval: 0.65, range: 2.6, capacity: 50) { SelfDamage = 4 },
-                new WeaponDefinition("cursed_cleaver_mk3", WeaponKind.Melee, SymbolTag.Curse, 3, damage: 130, interval: 0.6, range: 2.8, capacity: 60) { SelfDamage = 5 },
+                new WeaponDefinition("cursed_cleaver", WeaponKind.Melee, SymbolTag.Curse, 1, damage: 55, interval: 0.7, range: 3.1, capacity: 40) { SelfDamage = 3 },
+                new WeaponDefinition("cursed_cleaver_mk2", WeaponKind.Melee, SymbolTag.Curse, 2, damage: 85, interval: 0.65, range: 3.3, capacity: 50) { SelfDamage = 4 },
+                new WeaponDefinition("cursed_cleaver_mk3", WeaponKind.Melee, SymbolTag.Curse, 3, damage: 130, interval: 0.6, range: 3.5, capacity: 60) { SelfDamage = 5 },
             });
         }
     }

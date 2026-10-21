@@ -27,6 +27,8 @@ namespace SpinTheScrap.Player
         [Tooltip("攻撃の音の半径 (m)。近接 / 遠距離")]
         [SerializeField] float meleeNoiseRadius = 4f;
         [SerializeField] float rangedNoiseRadius = 11f;
+        [Tooltip("近接攻撃が当たる、正面の扇形の半分の角度（度）")]
+        [SerializeField] float meleeHalfAngle = 75f;
 
         FirstPersonController controller;
         Interactor interactor;
@@ -131,7 +133,7 @@ namespace SpinTheScrap.Player
             }
         }
 
-        /// <summary>目の前の扇形（60°）の中で、いちばん近い敵。</summary>
+        /// <summary>目の前の扇形（meleeHalfAngle）の中で、いちばん近い敵。</summary>
         Enemy FindMeleeTarget(Transform cam, float range)
         {
             var hits = Physics.OverlapSphere(cam.position, range + 0.4f, ~0, QueryTriggerInteraction.Ignore);
@@ -142,7 +144,7 @@ namespace SpinTheScrap.Player
                 var enemy = c.GetComponentInParent<Enemy>();
                 if (enemy == null || enemy.IsDead) continue;
                 var to = c.ClosestPoint(cam.position) - cam.position;
-                if (to.magnitude > range + 0.1f || Vector3.Angle(cam.forward, to) > 60f && to.magnitude > 0.6f) continue;
+                if (to.magnitude > range + 0.1f || Vector3.Angle(cam.forward, to) > meleeHalfAngle && to.magnitude > 0.6f) continue;
                 if (to.magnitude < bestDistance)
                 {
                     bestDistance = to.magnitude;
