@@ -49,6 +49,9 @@ namespace SpinTheScrap.Player
         /// <summary>武器が壊れた・弾が切れた時刻（HUD の表示）。</summary>
         public float WeaponBrokeTime { get; private set; } = -10f;
 
+        /// <summary>攻撃した（WeaponViewModel が振る・反動の動きを付ける）。</summary>
+        public event System.Action<WeaponInstance> Attacked;
+
         public WeaponInstance CurrentWeapon => session != null ? session.Run.Player(session.LocalPlayerId).Weapon ?? fists : fists;
         bool HandsFull => interactor.Held != null || interactor.Pushed != null;
 
@@ -110,6 +113,7 @@ namespace SpinTheScrap.Player
             var stats = session.Run.StatsOf(session.LocalPlayerId);
             var cam = controller.ViewCamera.transform;
             bool melee = weapon.Definition.Kind == WeaponKind.Melee;
+            Attacked?.Invoke(weapon);
 
             if (melee)
             {

@@ -444,6 +444,7 @@ namespace SpinTheScrap.World
             health = go.AddComponent<PlayerHealth>();
             go.AddComponent<PlayerNoise>();
             combat = go.AddComponent<PlayerCombat>();
+            go.AddComponent<WeaponViewModel>();
         }
     }
 }
