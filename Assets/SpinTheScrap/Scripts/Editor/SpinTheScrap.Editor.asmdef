@@ -5,7 +5,8 @@
         "SpinTheScrap.Core",
         "SpinTheScrap.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "FishNet.Runtime"
     ],
     "includePlatforms": [
         "Editor"

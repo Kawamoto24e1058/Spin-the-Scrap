@@ -112,6 +112,13 @@ namespace SpinTheScrap.Core
             return null;
         }
 
+        /// <summary>ランのシード・階層・やり直し回数から、その階層の間取りのシードを決める（全員が同じ値になる）。</summary>
+        public static ulong SeedFor(ulong runSeed, int floor, int attempt)
+        {
+            var rng = new Rng(runSeed ^ ((ulong)floor * 0x9E3779B97F4A7C15UL) ^ ((ulong)(attempt + 1) * 0xC2B2AE3D27D4EB4FUL));
+            return rng.NextULong();
+        }
+
         public static FacilityLayout Generate(ulong seed, int roomCount)
         {
             if (roomCount < 1) throw new ArgumentOutOfRangeException(nameof(roomCount));

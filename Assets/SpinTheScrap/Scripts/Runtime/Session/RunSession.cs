@@ -61,6 +61,11 @@ namespace SpinTheScrap.Session
             NewRun();
         }
 
+        /// <summary>ランのシード。協力プレイではホストがこれを配り、全員が同じ間取りを組み立てる。</summary>
+        public ulong RunSeed { get; private set; }
+        /// <summary>今の階層をやり直した回数（やり直すと間取りが変わる）。</summary>
+        public int Attempt { get; private set; }
+
         /// <summary>ランを始めた時刻（結果画面のプレイ時間。メニューで止めている間も数える）。</summary>
         public float RunStartRealtime { get; private set; }
 
@@ -68,6 +73,8 @@ namespace SpinTheScrap.Session
         {
             RunStartRealtime = Time.realtimeSinceStartup;
             ulong runSeed = seed != 0 ? (ulong)seed : (ulong)DateTime.UtcNow.Ticks;
+            RunSeed = runSeed;
+            Attempt = 0;
             Run = new RunState(Content, mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig(), runSeed);
             haul.Clear();
             LastSpin = null;
@@ -147,6 +154,7 @@ namespace SpinTheScrap.Session
                 return true;
             }
             Message = Strings.Format("base.next_floor_message", Run.Floor);
+            Attempt = 0;
             StartFloor();
             return true;
         }
@@ -155,6 +163,7 @@ namespace SpinTheScrap.Session
         public void RestartFloor()
         {
             if (Run.IsOver) return;
+            Attempt++;
             Message = null;
             StartFloor();
         }

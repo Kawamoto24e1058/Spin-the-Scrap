@@ -95,6 +95,11 @@ result.floor,到達：地下{0}階 / {1}階,Reached: B{0} of {1}
 result.kills,倒した敵：{0}体,Enemies defeated: {0}
 result.spins,回した回数：{0}回（大当たり {1}回・最高の質 {2}）,Spins: {0} (jackpots {1}, best tier {2})
 result.time,プレイ時間：{0}分{1}秒,Play time: {0}:{1}
+# --- 始める前の画面 ---
+lobby.solo,ひとりで遊ぶ,Play solo
+lobby.host,ホストになる（協力プレイ）,Host a co-op game
+lobby.join,参加する,Join
+lobby.note,協力プレイは今はローカルネットワーク（同じ PC か LAN）でつなぎます。敵やスロットの同期は次の段階です。,Co-op currently connects over LAN or on the same PC. Enemies and slot machines sync in the next stage.
 # --- 敵 ---
 enemy.Crawler,這う者,Crawler
 enemy.Lurker,徘徊者,Lurker

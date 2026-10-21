@@ -3,6 +3,7 @@ using System.Linq;
 using SpinTheScrap.Core;
 using SpinTheScrap.Enemies;
 using SpinTheScrap.Interaction;
+using SpinTheScrap.Net;
 using SpinTheScrap.Player;
 using SpinTheScrap.Session;
 using SpinTheScrap.UI;
@@ -21,6 +22,9 @@ namespace SpinTheScrap.World
         [SerializeField] Vector3 playerSpawn = new Vector3(0f, 1.1f, -8f);
         [Tooltip("フェーズ 1 で 2 人目が入るまでは 0 固定")]
         [SerializeField] int localOwnerId;
+        [Tooltip("協力プレイ用（Create Phase 0 Scene が設定する）")]
+        [SerializeField] FishNet.Managing.NetworkManager networkManager;
+        [SerializeField] Net.NetSession netSessionPrefab;
 
         RunSession session;
         FirstPersonController player;
@@ -62,8 +66,80 @@ namespace SpinTheScrap.World
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
 
-            OnFloorStarted(0);
+            NetPlayer.LocalTarget = player.transform;
+            gameObject.AddComponent<NetLobby>().Init(session.Strings, Begin);
+        }
+
+        // ---- ひとり・ホスト・参加 ----
+
+        NetMode mode = NetMode.Solo;
+        bool started;
+        (ulong seed, int floor, int attempt) builtFor;
+
+        bool IsClientOnly => mode == NetMode.Client;
+
+        /// <summary>始める前の画面で選んだ遊び方で始める。</summary>
+        void Begin(NetMode chosen, string address)
+        {
+            mode = chosen;
+            started = true;
             SetCursorLocked(true);
+            if (mode != NetMode.Solo && networkManager == null)
+            {
+                Debug.LogWarning("[Spin the Scrap] NetworkManager がありません。Create Phase 0 Scene でシーンを作り直してください。ひとりで始めます。");
+                mode = NetMode.Solo;
+            }
+            switch (mode)
+            {
+                case NetMode.Host:
+                    networkManager.ServerManager.StartConnection();
+                    networkManager.ClientManager.StartConnection();
+                    OnFloorStarted(0);
+                    break;
+                case NetMode.Client:
+                    networkManager.ClientManager.StartConnection(address);
+                    break;
+                default:
+                    OnFloorStarted(0);
+                    break;
+            }
+        }
+
+        /// <summary>ホスト：今の階層を全員に配る（NetSession がなければ作る）。</summary>
+        void PublishFloor()
+        {
+            if (mode != NetMode.Host || networkManager == null || !networkManager.IsServerStarted) return;
+            if (NetSession.Instance == null && netSessionPrefab != null)
+            {
+                var nob = Instantiate(netSessionPrefab);
+                networkManager.ServerManager.Spawn(nob.gameObject);
+            }
+            if (NetSession.Instance != null) NetSession.Instance.Publish(session.RunSeed, session.Run.Floor, session.Attempt);
+        }
+
+        /// <summary>
+        /// クライアント：ホストが配った階層を組み立てる。敵・ガラクタ・スロット台の結果はホストだけが持つ
+        /// （同期は次の段階。今は間取りとほかの人の分身だけが見える）。
+        /// </summary>
+        void UpdateClientFloor()
+        {
+            var net = NetSession.Instance;
+            if (net == null || net.RunSeed == 0) return;
+            var key = (net.RunSeed, net.Floor, net.Attempt);
+            if (key == builtFor) return;
+            builtFor = key;
+            if (scrapRoot != null) Destroy(scrapRoot.gameObject);
+            if (facility != null) Destroy(facility.Root.gameObject);
+            var config = session.Run.Config;
+            var layout = config.IsBossFloor(net.Floor)
+                ? FacilityLayout.CreateBossFloor()
+                : FacilityLayout.Generate(FacilityLayout.SeedFor(net.RunSeed, net.Floor, net.Attempt), config.RoomCountFor(net.Floor));
+            facility = FacilityBuilder.Build(layout);
+            scrapRoot = new GameObject("Scrap").transform;
+            health.ResetHealth();
+            player.Controller.enabled = false;
+            player.transform.SetPositionAndRotation(playerSpawn + Vector3.right * 1.5f, Quaternion.identity);
+            player.Controller.enabled = true;
         }
 
         void OnDestroy()
@@ -134,7 +210,7 @@ namespace SpinTheScrap.World
         /// <summary>通常の階では、倒された這う者が湧き直す。階層に長くいるほど早く湧く（長居するほど危ない）。</summary>
         void UpdateCrawlers()
         {
-            if (session.Run.IsBossFloor || facility == null) return;
+            if (session.Run.IsBossFloor || facility == null || IsClientOnly) return;
             crawlers.RemoveAll(c => c == null);
             int population = session.Enemies.CrawlerPopulationFor(session.Run.Floor);
             if (crawlers.Count >= population || Time.time < nextCrawlerTime) return;
@@ -164,6 +240,9 @@ namespace SpinTheScrap.World
 
         void Update()
         {
+            if (!started) return; // 始める前の画面
+            if (mode == NetMode.Host && NetSession.Instance == null) PublishFloor(); // サーバーが立ち上がったら配る
+            if (IsClientOnly) UpdateClientFloor();
             // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
             if (health.IsDown) basePanel.Visible = true;
             else if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
@@ -182,8 +261,10 @@ namespace SpinTheScrap.World
             if (basePanel.Visible != panelWasVisible) SetCursorLocked(!basePanel.Visible);
             panelWasVisible = basePanel.Visible;
             // ソロでは拠点メニューを開いている間は時間を止める（敵も止まる）。フェーズ 1 の協力プレイでは止めない
-            Time.timeScale = basePanel.Visible ? 0f : 1f;
-            AudioListener.pause = basePanel.Visible; // 世界の音（敵の気配・ジー・ガタガタ）も止める。UI の音は鳴る
+            // ひとりのときだけ時間と世界の音を止める（協力プレイでは止めない）
+            bool pause = basePanel.Visible && mode == NetMode.Solo;
+            Time.timeScale = pause ? 0f : 1f;
+            AudioListener.pause = pause;
 
             bool playing = !basePanel.Visible && Cursor.lockState == CursorLockMode.Locked;
             player.InputEnabled = playing;
@@ -237,7 +318,7 @@ namespace SpinTheScrap.World
             // ボス階層は決まった間取り、通常の階は自動生成
             var layout = run.IsBossFloor
                 ? FacilityLayout.CreateBossFloor()
-                : FacilityLayout.Generate(spawnRng.NextULong(), run.Config.RoomCountFor(run.Floor));
+                : FacilityLayout.Generate(FacilityLayout.SeedFor(session.RunSeed, run.Floor, session.Attempt), run.Config.RoomCountFor(run.Floor));
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
@@ -257,6 +338,7 @@ namespace SpinTheScrap.World
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
             player.transform.SetPositionAndRotation(playerSpawn, Quaternion.identity);
             player.Controller.enabled = true;
+            PublishFloor();
         }
 
         /// <summary>部屋ごとに、深さに応じた数と珍しさでガラクタを置く。特大は入口以外のどこか 1 部屋に必ず 1 個。</summary>

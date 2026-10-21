@@ -3,7 +3,8 @@
     "rootNamespace": "SpinTheScrap",
     "references": [
         "SpinTheScrap.Core",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "FishNet.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
