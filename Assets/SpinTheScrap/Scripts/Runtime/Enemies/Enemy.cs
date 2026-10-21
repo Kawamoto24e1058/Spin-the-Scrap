@@ -16,7 +16,7 @@ namespace SpinTheScrap.Enemies
     /// 部屋をまたぐときは間取り（FacilityLayout.Path）に沿ってドアを順に抜ける。
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class Enemy : MonoBehaviour, IScrapHittable
+    public sealed class Enemy : MonoBehaviour, IScrapHittable, IEnemyTarget
     {
         const float TurnSpeed = 360f;
         const float StuckCheckSeconds = 1.5f;
@@ -28,10 +28,8 @@ namespace SpinTheScrap.Enemies
         EnemyBrain brain;
         HealthState health;
         BuiltFacility facility;
-        FirstPersonController player;
-        PlayerHealth playerHealth;
-        Flashlight flashlight;
         Rng rng;
+        PlayerTarget target;
         CharacterController body;
         Transform visual;
         Light eyeLight;
@@ -60,13 +58,15 @@ namespace SpinTheScrap.Enemies
         public EnemyState State => brain != null ? brain.State : EnemyState.Wander;
         public HealthState Health => health;
         public bool IsDead => dead;
+        public double CurrentHealth => health != null ? health.Current : 0;
+        public double MaxHealth => health != null ? health.Max : 0;
+        public Transform Transform => transform;
+        public void ApplyHit(double damage, bool stun, SymbolTag weaponFamily, bool explosive) => TakeDamage(damage, stun, weaponFamily, explosive);
 
         /// <summary>どれかの敵が倒された（攻略条件・ガラクタを落とす・倒したときの回復に使う）。</summary>
         public static event Action<Enemy> AnyDied;
         /// <summary>群れを呼ぶ人形が這う者を呼びたい（Phase0Bootstrap が呼び出して、呼んだ敵を返す）。</summary>
         public static Func<Enemy, Vector3, Enemy> SummonRequested;
-        /// <summary>生きている敵（HUD で紙の強化の位置表示に使う）。</summary>
-        public static readonly System.Collections.Generic.List<Enemy> All = new System.Collections.Generic.List<Enemy>();
         /// <summary>プレイヤーの見つかりにくさ（人形の強化）。Phase0Bootstrap が強化から設定する。</summary>
         public static double PlayerStealth;
 
@@ -75,25 +75,39 @@ namespace SpinTheScrap.Enemies
         {
             AnyDied = null;
             SummonRequested = null;
-            All.Clear();
             PlayerStealth = 0;
         }
 
         /// <summary>見た目（仮素材）と当たり判定を組み立てて置く。</summary>
+        /// <param name="root">協力プレイのホストでは、ネットワークで配る敵のプレハブ（NetEnemy）のインスタンスを渡す。</param>
         public static Enemy Spawn(EnemyKind kind, int floor, Transform parent, Vector3 position, EnemyRules enemyRules,
-            BuiltFacility builtFacility, FirstPersonController fpc, PlayerHealth health, Flashlight light, ulong seed)
+            BuiltFacility builtFacility, ulong seed, GameObject root = null)
         {
-            var go = new GameObject(kind.ToString());
-            go.transform.SetParent(parent, true);
+            var go = root != null ? root : new GameObject();
+            go.name = kind.ToString();
+            if (parent != null) go.transform.SetParent(parent, true);
             var cc = go.AddComponent<CharacterController>();
+            var visual = BuildBody(kind, go.transform, out float height, out float radius, out float head);
+            cc.height = height;
+            cc.radius = radius;
+            cc.stepOffset = Mathf.Min(0.3f, cc.height * 0.3f);
+            go.transform.position = position + Vector3.up * (cc.height / 2f + 0.05f);
+            return Setup(go, cc, visual, kind, floor, enemyRules, builtFacility, seed, head);
+        }
+
+        /// <summary>
+        /// 種類ごとの見た目（仮素材）を組み立てる。当たり判定の大きさと目の高さも返す。
+        /// 協力プレイのクライアントは NetEnemy から呼び、判断なしの見た目だけを作る。
+        /// </summary>
+        public static Transform BuildBody(EnemyKind kind, Transform parent, out float height, out float radius, out float head)
+        {
             var visual = new GameObject("Visual").transform;
-            visual.SetParent(go.transform, false);
-            float head;
+            visual.SetParent(parent, false);
             switch (kind)
             {
                 case EnemyKind.Crawler:
-                    cc.height = 0.9f;
-                    cc.radius = 0.4f;
+                    height = 0.9f;
+                    radius = 0.4f;
                     head = 0.6f;
                     // 低く這う、赤黒い塊
                     Part(visual, PrimitiveType.Capsule, new Vector3(0f, -0.1f, 0f), new Vector3(0.7f, 0.45f, 1.1f), new Color(0.25f, 0.05f, 0.05f), Quaternion.Euler(90f, 0f, 0f));
@@ -101,8 +115,8 @@ namespace SpinTheScrap.Enemies
                     Eyes(visual, new Vector3(0f, 0.12f, 0.68f), 0.08f, 0.05f);
                     break;
                 case EnemyKind.Brute:
-                    cc.height = 2.9f;
-                    cc.radius = 0.75f;
+                    height = 2.9f;
+                    radius = 0.75f;
                     head = 2.6f;
                     // 灰色の巨体。目はない
                     Part(visual, PrimitiveType.Capsule, new Vector3(0f, -0.1f, 0f), new Vector3(1.4f, 1.35f, 1.1f), new Color(0.32f, 0.31f, 0.3f));
@@ -111,8 +125,8 @@ namespace SpinTheScrap.Enemies
                     Part(visual, PrimitiveType.Cube, new Vector3(0.85f, 0.2f, 0.2f), new Vector3(0.35f, 1.4f, 0.35f), new Color(0.3f, 0.29f, 0.28f));
                     break;
                 case EnemyKind.Dynamo:
-                    cc.height = 2.6f;
-                    cc.radius = 0.9f;
+                    height = 2.6f;
+                    radius = 0.9f;
                     head = 2.2f;
                     // 配電盤のような箱に、青く光るコイル
                     Part(visual, PrimitiveType.Cube, new Vector3(0f, -0.1f, 0f), new Vector3(1.7f, 2.2f, 1.3f), new Color(0.22f, 0.25f, 0.3f));
@@ -121,8 +135,8 @@ namespace SpinTheScrap.Enemies
                     Part(visual, PrimitiveType.Cube, new Vector3(0f, 0.3f, 0.66f), new Vector3(0.9f, 0.5f, 0.04f), new Color(0.1f, 0.1f, 0.12f));
                     break;
                 case EnemyKind.Puppeteer:
-                    cc.height = 2.4f;
-                    cc.radius = 0.4f;
+                    height = 2.4f;
+                    radius = 0.4f;
                     head = 2.1f;
                     // 細長い人形。大きな白い頭と、垂れた糸
                     Part(visual, PrimitiveType.Capsule, new Vector3(0f, -0.2f, 0f), new Vector3(0.45f, 0.9f, 0.35f), new Color(0.35f, 0.1f, 0.2f));
@@ -132,17 +146,20 @@ namespace SpinTheScrap.Enemies
                         Part(visual, PrimitiveType.Cube, new Vector3(x, 0.6f, 0f), new Vector3(0.01f, 1.6f, 0.01f), new Color(0.85f, 0.85f, 0.8f));
                     break;
                 default:
-                    cc.height = 2.1f;
-                    cc.radius = 0.35f;
+                    height = 2.1f;
+                    radius = 0.35f;
                     head = 1.7f;
                     Part(visual, PrimitiveType.Capsule, new Vector3(0f, -0.1f, 0f), new Vector3(0.55f, 0.95f, 0.45f), new Color(0.06f, 0.06f, 0.07f));
                     Part(visual, PrimitiveType.Sphere, new Vector3(0f, 0.85f, 0f), new Vector3(0.36f, 0.42f, 0.36f), new Color(0.85f, 0.83f, 0.78f));
                     Eyes(visual, new Vector3(0f, 0.9f, 0.16f), 0.08f, 0.06f);
                     break;
             }
-            cc.stepOffset = Mathf.Min(0.3f, cc.height * 0.3f);
-            go.transform.position = position + Vector3.up * (cc.height / 2f + 0.05f);
+            return visual;
+        }
 
+        static Enemy Setup(GameObject go, CharacterController cc, Transform visual, EnemyKind kind, int floor, EnemyRules enemyRules,
+            BuiltFacility builtFacility, ulong seed, float head)
+        {
             Light eye = null;
             if (kind != EnemyKind.Brute && kind != EnemyKind.Dynamo)
             {
@@ -161,9 +178,6 @@ namespace SpinTheScrap.Enemies
             enemy.brain = new EnemyBrain(enemy.rules);
             enemy.health = new HealthState(enemyRules.HealthFor(kind, floor));
             enemy.facility = builtFacility;
-            enemy.player = fpc;
-            enemy.playerHealth = health;
-            enemy.flashlight = light;
             enemy.rng = new Rng(seed);
             enemy.visual = visual;
             enemy.eyeLight = eye;
@@ -214,13 +228,13 @@ namespace SpinTheScrap.Enemies
         {
             body = GetComponent<CharacterController>();
             NoiseEvents.Emitted += OnNoise;
-            All.Add(this);
+            EnemyRegistry.All.Add(this);
         }
 
         void OnDestroy()
         {
             NoiseEvents.Emitted -= OnNoise;
-            All.Remove(this);
+            EnemyRegistry.All.Remove(this);
         }
 
         void OnNoise(Vector3 position, float radius)
@@ -259,22 +273,26 @@ namespace SpinTheScrap.Enemies
         void Die()
         {
             dead = true;
-            All.Remove(this);
+            EnemyRegistry.All.Remove(this);
             Sfx.PlayAt(SfxClips.Groan, transform.position, 0.9f, kind == EnemyKind.Crawler ? 1.6f : kind == EnemyKind.Brute ? 0.6f : 1f);
             AnyDied?.Invoke(this);
-            Destroy(gameObject);
+            // 協力プレイでネットワークに配っている敵は、ネットワークから消す
+            var nob = GetComponent<FishNet.Object.NetworkObject>();
+            if (nob != null && nob.IsSpawned) FishNet.InstanceFinder.ServerManager.Despawn(gameObject);
+            else Destroy(gameObject);
         }
 
         void Update()
         {
             if (brain == null || dead || Time.deltaTime <= 0f) return; // 拠点メニューで時間が止まっている間は何もしない
+            target = PlayerTargets.Nearest(transform.position);
             var perception = Perceive();
             heardNoise = null;
 
             if (wanderTarget == null || Flat(wanderTarget.Value - transform.position).magnitude < 1f) wanderTarget = PickWanderTarget();
             var decision = brain.Tick(Time.deltaTime, perception, ToN(wanderTarget.Value));
 
-            if (decision.Attack && playerHealth != null) playerHealth.Damage(rules.AttackDamage);
+            if (decision.Attack && target != null) target.Damage(rules.AttackDamage);
             if (kind == EnemyKind.Dynamo) UpdateDischarge(decision.State);
             if (kind == EnemyKind.Puppeteer)
             {
@@ -309,12 +327,16 @@ namespace SpinTheScrap.Enemies
                 nextSpecialTime = Time.time + (float)rules.DynamoDischargeInterval;
                 Sfx.PlayAt(SfxClips.Bang, transform.position, 1f, 1.8f);
                 NoiseEvents.Emit(transform.position, 20f);
-                var cam = player.ViewCamera.transform;
-                float distance = Vector3.Distance(transform.position, player.transform.position);
+                // 範囲内で、物陰に隠れていない全員に当たる
                 var center = transform.position + Vector3.up * 0.8f;
-                bool covered = Physics.Linecast(center, cam.position, out var hit, ~0, QueryTriggerInteraction.Ignore)
-                               && hit.collider != player.Controller && hit.collider != body;
-                if (distance <= rules.DynamoDischargeRadius && !covered && playerHealth != null) playerHealth.Damage(rules.AttackDamage * 1.5);
+                foreach (var t in PlayerTargets.All)
+                {
+                    if (t.Body == null || (t.IsDown != null && t.IsDown())) continue;
+                    if (Vector3.Distance(transform.position, t.Body.position) > rules.DynamoDischargeRadius) continue;
+                    bool covered = Physics.Linecast(center, t.Eye(), out var hit, ~0, QueryTriggerInteraction.Ignore)
+                                   && hit.collider != t.Collider && hit.collider != body;
+                    if (!covered) t.Damage(rules.AttackDamage * 1.5);
+                }
             }
             else coreLight.intensity = 2f;
         }
@@ -336,11 +358,11 @@ namespace SpinTheScrap.Enemies
         /// <summary>群れを呼ぶ人形：近づかれすぎたら、プレイヤーから離れる方へ逃げる。</summary>
         EnemyDecision KeepDistance(EnemyDecision decision)
         {
-            if (decision.State != EnemyState.Chase) return decision;
-            var away = Flat(transform.position - player.transform.position);
+            if (decision.State != EnemyState.Chase || target == null) return decision;
+            var away = Flat(transform.position - target.Body.position);
             if (away.magnitude >= rules.PuppeteerKeepDistance) return new EnemyDecision { State = decision.State, Attack = decision.Attack };
-            var target = transform.position + away.normalized * 4f;
-            decision.MoveTarget = ToN(target);
+            var fleeTo = transform.position + away.normalized * 4f;
+            decision.MoveTarget = ToN(fleeTo);
             return decision;
         }
 
@@ -388,30 +410,34 @@ namespace SpinTheScrap.Enemies
 
         EnemyPerception Perceive()
         {
-            var cam = player.ViewCamera.transform;
+            if (target == null)
+                return new EnemyPerception { Position = ToN(transform.position), Forward = ToN(Flat(transform.forward).normalized), PlayerDown = true,
+                    HeardNoise = heardNoise.HasValue ? ToN(heardNoise.Value) : (NVector3?)null };
+            var eye = target.Eye();
             var head = transform.position + Vector3.up * (headHeight - body.height / 2f);
-            bool lineOfSight = !Physics.Linecast(head, cam.position, out var hit, ~0, QueryTriggerInteraction.Ignore)
-                               || hit.collider == player.Controller;
+            bool lineOfSight = !Physics.Linecast(head, eye, out var hit, ~0, QueryTriggerInteraction.Ignore)
+                               || hit.collider == target.Collider;
 
             return new EnemyPerception
             {
                 Position = ToN(transform.position),
                 Forward = ToN(Flat(transform.forward).normalized),
-                PlayerPosition = ToN(player.transform.position),
+                PlayerPosition = ToN(target.Body.position),
                 HasLineOfSight = lineOfSight,
-                PlayerDown = playerHealth != null && playerHealth.IsDown,
+                PlayerDown = target.IsDown != null && target.IsDown(),
                 HeardNoise = heardNoise.HasValue ? ToN(heardNoise.Value) : (NVector3?)null,
-                LitByFlashlight = lineOfSight && IsLitByFlashlight(cam),
+                LitByFlashlight = lineOfSight && IsLitByFlashlight(),
                 Stealth = PlayerStealth,
             };
         }
 
-        bool IsLitByFlashlight(Transform cam)
+        bool IsLitByFlashlight()
         {
-            if (flashlight == null || !flashlight.IsOn) return false;
+            if (target.Flashlight == null || !target.Flashlight.IsOn || target.View == null) return false;
+            var cam = target.View;
             var to = transform.position - cam.position;
             if (to.magnitude > rules.FlashlightNoticeRange) return false;
-            return Vector3.Angle(cam.forward, to) <= flashlight.SpotAngle / 2f;
+            return Vector3.Angle(cam.forward, to) <= target.Flashlight.SpotAngle / 2f;
         }
 
         void Move(EnemyDecision decision)
@@ -436,7 +462,7 @@ namespace SpinTheScrap.Enemies
             else if (decision.State == EnemyState.Chase)
             {
                 // 止まっていても、追っている相手の方を向く
-                var face = Flat(player.transform.position - transform.position);
+                var face = target != null ? Flat(target.Body.position - transform.position) : Vector3.zero;
                 if (face.sqrMagnitude > 0.01f)
                     transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(face), TurnSpeed * Time.deltaTime);
             }

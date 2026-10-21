@@ -9,6 +9,12 @@ namespace SpinTheScrap.UI
         public static string Describe(RunSession session)
         {
             var s = session.Strings;
+            if (Net.NetSession.IsRemoteView)
+            {
+                var net = Net.NetSession.Instance;
+                string netText = s.Format("objective.label", s.Get("objective." + net.ObjectiveKind), net.ObjectiveProgress + "/" + net.ObjectiveTarget);
+                return net.ObjectiveTarget > 0 && net.ObjectiveProgress >= net.ObjectiveTarget ? netText + "  " + s.Get("objective.done") : netText;
+            }
             var objective = session.Run.Objective;
             string progress = (int)objective.Progress + "/" + (int)objective.Target;
             string text = s.Format("objective.label", s.Get(objective.NameKey), progress);

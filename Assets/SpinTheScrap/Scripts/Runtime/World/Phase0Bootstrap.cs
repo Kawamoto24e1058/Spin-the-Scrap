@@ -25,6 +25,7 @@ namespace SpinTheScrap.World
         [Tooltip("協力プレイ用（Create Phase 0 Scene が設定する）")]
         [SerializeField] FishNet.Managing.NetworkManager networkManager;
         [SerializeField] Net.NetSession netSessionPrefab;
+        [SerializeField] Net.NetEnemy netEnemyPrefab;
 
         RunSession session;
         FirstPersonController player;
@@ -67,6 +68,19 @@ namespace SpinTheScrap.World
             basePanel.Init(session);
 
             NetPlayer.LocalTarget = player.transform;
+            NetPlayer.LocalHealth = health;
+            // 敵が狙えるプレイヤーとして、このマシンのプレイヤーを登録する（協力プレイのほかの人は NetPlayer が登録する）
+            var view = player.ViewCamera.transform;
+            PlayerTargets.All.Add(new PlayerTarget
+            {
+                Body = player.transform,
+                Eye = () => view.position,
+                Collider = player.Controller,
+                IsDown = () => health.IsDown,
+                Damage = amount => health.Damage(amount),
+                Flashlight = flashlight,
+                View = view,
+            });
             gameObject.AddComponent<NetLobby>().Init(session.Strings, Begin);
         }
 
@@ -74,6 +88,7 @@ namespace SpinTheScrap.World
 
         NetMode mode = NetMode.Solo;
         bool started;
+        bool hostWaiting;
         (ulong seed, int floor, int attempt) builtFor;
 
         bool IsClientOnly => mode == NetMode.Client;
@@ -92,9 +107,10 @@ namespace SpinTheScrap.World
             switch (mode)
             {
                 case NetMode.Host:
+                    // 階層はサーバーが立ち上がってから組み立てる（敵をネットワークに配るため。Update で待つ）
                     networkManager.ServerManager.StartConnection();
                     networkManager.ClientManager.StartConnection();
-                    OnFloorStarted(0);
+                    hostWaiting = true;
                     break;
                 case NetMode.Client:
                     networkManager.ClientManager.StartConnection(address);
@@ -218,12 +234,36 @@ namespace SpinTheScrap.World
             SpawnCrawler(awayFromPlayer: true);
         }
 
+        /// <summary>
+        /// 敵を置く。協力プレイのホストではネットワークで配る（NetEnemy のプレハブに本体を組み立てて Spawn）。
+        /// ネットワークの敵は施設の子にせず、階層を移るときに DespawnNetworkEnemies で消す。
+        /// </summary>
+        Enemy SpawnEnemy(EnemyKind kind, Vector3 position)
+        {
+            int floor = session.Run.Floor;
+            if (mode == NetMode.Host && netEnemyPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netEnemyPrefab);
+                var enemy = Enemy.Spawn(kind, floor, null, position, session.Enemies, facility, spawnRng.NextULong(), instance.gameObject);
+                instance.BindHost(enemy);
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return enemy;
+            }
+            return Enemy.Spawn(kind, floor, facility.Root, position, session.Enemies, facility, spawnRng.NextULong());
+        }
+
+        void DespawnNetworkEnemies()
+        {
+            if (networkManager == null || !networkManager.IsServerStarted) return;
+            foreach (var enemy in FindObjectsByType<NetEnemy>())
+                if (enemy.IsSpawned) networkManager.ServerManager.Despawn(enemy.gameObject);
+        }
+
         /// <summary>群れを呼ぶ人形が呼んだ這う者。</summary>
         Enemy SummonMinion(Enemy summoner, Vector3 position)
         {
             if (facility == null) return null;
-            return Enemy.Spawn(EnemyKind.Crawler, session.Run.Floor, facility.Root, new Vector3(position.x, 0f, position.z),
-                session.Enemies, facility, player, health, flashlight, spawnRng.NextULong());
+            return SpawnEnemy(EnemyKind.Crawler, new Vector3(position.x, 0f, position.z));
         }
 
         void SpawnCrawler(bool awayFromPlayer)
@@ -233,15 +273,21 @@ namespace SpinTheScrap.World
             if (rooms.Count == 0) return;
             var room = rooms[spawnRng.Next(rooms.Count)];
             var offset = new Vector3((float)(spawnRng.NextDouble() * 12 - 6), 0f, (float)(spawnRng.NextDouble() * 12 - 6));
-            var enemy = Enemy.Spawn(EnemyKind.Crawler, session.Run.Floor, facility.Root, FacilityBuilder.RoomCenter(room.Plan) + offset,
-                session.Enemies, facility, player, health, flashlight, spawnRng.NextULong());
+            var enemy = SpawnEnemy(EnemyKind.Crawler, FacilityBuilder.RoomCenter(room.Plan) + offset);
             crawlers.Add(enemy);
         }
 
         void Update()
         {
             if (!started) return; // 始める前の画面
+            if (hostWaiting)
+            {
+                if (!networkManager.IsServerStarted) return;
+                hostWaiting = false;
+                OnFloorStarted(0);
+            }
             if (mode == NetMode.Host && NetSession.Instance == null) PublishFloor(); // サーバーが立ち上がったら配る
+            if (mode == NetMode.Host && NetSession.Instance != null) NetSession.Instance.PublishProgress(session.Run);
             if (IsClientOnly) UpdateClientFloor();
             // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
             if (health.IsDown) basePanel.Visible = true;
@@ -311,6 +357,7 @@ namespace SpinTheScrap.World
         void OnFloorStarted(int enemyBonus)
         {
             basePanel.OnDownedScreen = false;
+            DespawnNetworkEnemies();
             if (scrapRoot != null) Destroy(scrapRoot.gameObject);
             if (facility != null) Destroy(facility.Root.gameObject);
 
@@ -395,8 +442,7 @@ namespace SpinTheScrap.World
             if (run.IsBossFloor)
             {
                 var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
-                Enemy.Spawn(run.Config.BossFor(run.Floor), run.Floor, facility.Root, FacilityBuilder.RoomCenter(lair.Plan),
-                    rules, facility, player, health, flashlight, spawnRng.NextULong());
+                SpawnEnemy(run.Config.BossFor(run.Floor), FacilityBuilder.RoomCenter(lair.Plan));
                 return;
             }
 
@@ -404,7 +450,7 @@ namespace SpinTheScrap.World
             foreach (var room in rooms.Take(count))
             {
                 var position = FacilityBuilder.RoomCenter(room.Plan) + new Vector3(3f, 0f, 3f);
-                Enemy.Spawn(EnemyKind.Lurker, run.Floor, facility.Root, position, rules, facility, player, health, flashlight, spawnRng.NextULong());
+                SpawnEnemy(EnemyKind.Lurker, position);
             }
         }
 

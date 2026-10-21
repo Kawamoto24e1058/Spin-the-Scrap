@@ -51,7 +51,9 @@ namespace SpinTheScrap.UI
             DrawRevealedEnemies();
 
             // 左上：ランの状況
-            string status = s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
+            string status = Net.NetSession.IsRemoteView
+                ? s.Format("base.status", Net.NetSession.Instance.Floor, run.Config.FloorCount, Net.NetSession.Instance.Lives, session.Medals(Net.NetSession.Instance.Medals))
+                : s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
             ShadowLabel(new Rect(16, 12, 900, 24), status + "    " + ObjectiveText.Describe(session), label);
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
@@ -137,9 +139,9 @@ namespace SpinTheScrap.UI
             center.normal.textColor = prev;
 
             var target = combat != null ? combat.Target : null;
-            if (target == null || target.Health == null) return;
+            if (target == null || target.MaxHealth <= 0) return;
             var bar = new Rect(Screen.width / 2f - 60, Screen.height / 2f - 34, 120, 6);
-            float ratio = (float)(target.Health.Current / target.Health.Max);
+            float ratio = (float)(target.CurrentHealth / target.MaxHealth);
             var c = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, 0.6f);
             GUI.DrawTexture(bar, Texture2D.whiteTexture);
@@ -157,12 +159,12 @@ namespace SpinTheScrap.UI
             var cam = player.ViewCamera;
             var prev = center.normal.textColor;
             center.normal.textColor = new Color(1f, 0.35f, 0.3f, 0.85f);
-            foreach (var enemy in Enemies.Enemy.All)
+            foreach (var enemy in Enemies.EnemyRegistry.All)
             {
-                if (enemy == null || enemy.IsDead) continue;
-                float distance = Vector3.Distance(enemy.transform.position, player.transform.position);
+                if (enemy == null || enemy.IsDead || enemy.Transform == null) continue;
+                float distance = Vector3.Distance(enemy.Transform.position, player.transform.position);
                 if (distance > range) continue;
-                var screen = cam.WorldToScreenPoint(enemy.transform.position);
+                var screen = cam.WorldToScreenPoint(enemy.Transform.position);
                 if (screen.z <= 0) continue; // 後ろ
                 var rect = new Rect(screen.x - 30, Screen.height - screen.y - 12, 60, 24);
                 ShadowLabel(rect, "◆ " + Mathf.RoundToInt(distance) + "m", center);

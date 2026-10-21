@@ -18,6 +18,7 @@ namespace SpinTheScrap.EditorTools
         const string PrefabFolder = "Assets/SpinTheScrap/Prefabs";
         const string NetPlayerPath = PrefabFolder + "/NetPlayer.prefab";
         const string NetSessionPath = PrefabFolder + "/NetSession.prefab";
+        const string NetEnemyPath = PrefabFolder + "/NetEnemy.prefab";
 
         [MenuItem("Spin the Scrap/Create Phase 0 Scene", priority = 0)]
         public static void CreatePhase0Scene()
@@ -50,6 +51,7 @@ namespace SpinTheScrap.EditorTools
             var so = new SerializedObject(bootstrap);
             so.FindProperty("networkManager").objectReferenceValue = manager;
             so.FindProperty("netSessionPrefab").objectReferenceValue = prefabs.session;
+            so.FindProperty("netEnemyPrefab").objectReferenceValue = prefabs.enemy;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -59,7 +61,7 @@ namespace SpinTheScrap.EditorTools
         }
 
         /// <summary>協力プレイのプレハブ（プレイヤーの分身・共有状態）を作る。FishNet の DefaultPrefabObjects に自動で載る。</summary>
-        static (FishNet.Object.NetworkObject player, Net.NetSession session) CreateNetworkPrefabs()
+        static (FishNet.Object.NetworkObject player, Net.NetSession session, Net.NetEnemy enemy) CreateNetworkPrefabs()
         {
             Directory.CreateDirectory(PrefabFolder);
             AssetDatabase.Refresh();
@@ -77,8 +79,19 @@ namespace SpinTheScrap.EditorTools
             var session = PrefabUtility.SaveAsPrefabAsset(sessionGo, NetSessionPath);
             Object.DestroyImmediate(sessionGo);
 
+            // 敵：位置はホストが決める（サーバー権威の NetworkTransform）
+            var enemyGo = new GameObject("NetEnemy");
+            enemyGo.AddComponent<FishNet.Object.NetworkObject>();
+            var transform = enemyGo.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
+            var so = new SerializedObject(transform);
+            so.FindProperty("_clientAuthoritative").boolValue = false;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            enemyGo.AddComponent<Net.NetEnemy>();
+            var enemy = PrefabUtility.SaveAsPrefabAsset(enemyGo, NetEnemyPath);
+            Object.DestroyImmediate(enemyGo);
+
             AssetDatabase.SaveAssets();
-            return (player.GetComponent<FishNet.Object.NetworkObject>(), session.GetComponent<Net.NetSession>());
+            return (player.GetComponent<FishNet.Object.NetworkObject>(), session.GetComponent<Net.NetSession>(), enemy.GetComponent<Net.NetEnemy>());
         }
 
         [MenuItem("Spin the Scrap/Generate MVP Content Assets", priority = 20)]

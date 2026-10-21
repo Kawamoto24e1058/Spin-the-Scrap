@@ -42,7 +42,7 @@ namespace SpinTheScrap.Player
         Light muzzle;
 
         /// <summary>照準の先にいる敵（HUD で体力を出す）。</summary>
-        public Enemy Target { get; private set; }
+        public IEnemyTarget Target { get; private set; }
         /// <summary>直前に当てた時刻と、それが会心だったか（HUD の当たり表示）。</summary>
         public float LastHitTime { get; private set; } = -10f;
         public bool LastHitCritical { get; private set; }
@@ -103,7 +103,7 @@ namespace SpinTheScrap.Player
             var cam = controller.ViewCamera.transform;
             Target = null;
             if (Physics.Raycast(cam.position, cam.forward, out var hit, targetRange, ~0, QueryTriggerInteraction.Ignore))
-                Target = hit.collider.GetComponentInParent<Enemy>();
+                Target = EnemyRegistry.FromCollider(hit.collider);
         }
 
         void Attack()
@@ -119,7 +119,7 @@ namespace SpinTheScrap.Player
             {
                 Sfx.Play2D(SfxClips.Whoosh, 0.35f, 1.4f);
                 var enemy = FindMeleeTarget(cam, (float)weapon.Definition.Range);
-                if (enemy != null) Hit(enemy, weapon, stats, enemy.transform.position);
+                if (enemy != null) Hit(enemy, weapon, stats, enemy.Transform.position);
                 NoiseEvents.Emit(transform.position, meleeNoiseRadius);
             }
             else
@@ -138,14 +138,14 @@ namespace SpinTheScrap.Player
         }
 
         /// <summary>目の前の扇形（meleeHalfAngle）の中で、いちばん近い敵。</summary>
-        Enemy FindMeleeTarget(Transform cam, float range)
+        IEnemyTarget FindMeleeTarget(Transform cam, float range)
         {
             var hits = Physics.OverlapSphere(cam.position, range + 0.4f, ~0, QueryTriggerInteraction.Ignore);
-            Enemy best = null;
+            IEnemyTarget best = null;
             float bestDistance = float.MaxValue;
             foreach (var c in hits)
             {
-                var enemy = c.GetComponentInParent<Enemy>();
+                var enemy = EnemyRegistry.FromCollider(c);
                 if (enemy == null || enemy.IsDead) continue;
                 var to = c.ClosestPoint(cam.position) - cam.position;
                 if (to.magnitude > range + 0.1f || Vector3.Angle(cam.forward, to) > meleeHalfAngle && to.magnitude > 0.6f) continue;
@@ -163,14 +163,14 @@ namespace SpinTheScrap.Player
             var def = weapon.Definition;
             float range = (float)def.Range;
             var hits = Physics.RaycastAll(cam.position, cam.forward, range, ~0, QueryTriggerInteraction.Ignore)
-                .Where(h => h.collider != controller.Controller && h.collider.attachedRigidbody == null || h.collider.GetComponentInParent<Enemy>() != null)
+                .Where(h => h.collider != controller.Controller && h.collider.attachedRigidbody == null || EnemyRegistry.FromCollider(h.collider) != null)
                 .OrderBy(h => h.distance).ToList();
 
             var end = cam.position + cam.forward * range;
-            var struck = new HashSet<Enemy>();
+            var struck = new HashSet<IEnemyTarget>();
             foreach (var h in hits)
             {
-                var enemy = h.collider.GetComponentInParent<Enemy>();
+                var enemy = EnemyRegistry.FromCollider(h.collider);
                 end = h.point;
                 if (enemy == null) break; // 壁や物に当たって止まる
                 if (enemy.IsDead || !struck.Add(enemy)) continue;
@@ -189,10 +189,10 @@ namespace SpinTheScrap.Player
             }
         }
 
-        void Hit(Enemy enemy, WeaponInstance weapon, PlayerStats stats, Vector3 point)
+        void Hit(IEnemyTarget enemy, WeaponInstance weapon, PlayerStats stats, Vector3 point)
         {
             var result = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-            enemy.TakeDamage(result.Damage, result.Stun, weapon.Definition.Family);
+            enemy.ApplyHit(result.Damage, result.Stun, weapon.Definition.Family, false);
             if (result.Heal > 0) health.Heal(result.Heal);
             if (result.SelfDamage > 0) health.Damage(result.SelfDamage);
             LastHitTime = Time.time;
@@ -202,33 +202,33 @@ namespace SpinTheScrap.Player
             // 連鎖：近くの敵へ弱めのダメージ
             int chain = weapon.Definition.Chain;
             if (chain <= 0) return;
-            var from = enemy.transform.position;
+            var from = enemy.Transform.position;
             var nearby = Physics.OverlapSphere(from, chainRange, ~0, QueryTriggerInteraction.Ignore)
-                .Select(c => c.GetComponentInParent<Enemy>())
+                .Select(c => EnemyRegistry.FromCollider(c))
                 .Where(e => e != null && e != enemy && !e.IsDead).Distinct()
-                .OrderBy(e => (e.transform.position - from).sqrMagnitude).Take(chain).ToList();
+                .OrderBy(e => (e.Transform.position - from).sqrMagnitude).Take(chain).ToList();
             foreach (var other in nearby)
             {
                 var link = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-                other.TakeDamage(link.Damage * chainDamageRatio, link.Stun, weapon.Definition.Family);
-                ShowTracer(from, other.transform.position, new Color(0.5f, 0.8f, 1f));
-                from = other.transform.position;
+                other.ApplyHit(link.Damage * chainDamageRatio, link.Stun, weapon.Definition.Family, false);
+                ShowTracer(from, other.Transform.position, new Color(0.5f, 0.8f, 1f));
+                from = other.Transform.position;
             }
         }
 
-        void Explode(Vector3 point, WeaponInstance weapon, PlayerStats stats, HashSet<Enemy> alreadyHit)
+        void Explode(Vector3 point, WeaponInstance weapon, PlayerStats stats, HashSet<IEnemyTarget> alreadyHit)
         {
             float radius = (float)(weapon.Definition.ExplosionRadius * stats.ExplosionRadiusMultiplier);
             Sfx.PlayAt(SfxClips.Bang, point, 1f, 1.2f);
             NoiseEvents.Emit(point, radius * 4f);
             var victims = Physics.OverlapSphere(point, radius, ~0, QueryTriggerInteraction.Ignore)
-                .Select(c => c.GetComponentInParent<Enemy>()).Where(e => e != null && !e.IsDead).Distinct().ToList();
+                .Select(c => EnemyRegistry.FromCollider(c)).Where(e => e != null && !e.IsDead).Distinct().ToList();
             foreach (var enemy in victims)
             {
                 if (alreadyHit.Contains(enemy)) continue;
-                float falloff = 1f - Mathf.Clamp01(Vector3.Distance(point, enemy.transform.position) / radius) * 0.5f;
+                float falloff = 1f - Mathf.Clamp01(Vector3.Distance(point, enemy.Transform.position) / radius) * 0.5f;
                 var result = CombatRules.Hit(weapon, stats, random.NextDouble(), random.NextDouble());
-                enemy.TakeDamage(result.Damage * falloff, result.Stun, weapon.Definition.Family, explosive: true);
+                enemy.ApplyHit(result.Damage * falloff, result.Stun, weapon.Definition.Family, true);
             }
             var flash = new GameObject("Explosion light").AddComponent<Light>();
             flash.transform.position = point;
