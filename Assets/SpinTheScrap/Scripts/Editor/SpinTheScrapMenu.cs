@@ -20,6 +20,7 @@ namespace SpinTheScrap.EditorTools
         const string NetSessionPath = PrefabFolder + "/NetSession.prefab";
         const string NetEnemyPath = PrefabFolder + "/NetEnemy.prefab";
         const string NetScrapPath = PrefabFolder + "/NetScrap.prefab";
+        const string NetCartPath = PrefabFolder + "/NetCart.prefab";
 
         [MenuItem("Spin the Scrap/Create Phase 0 Scene", priority = 0)]
         public static void CreatePhase0Scene()
@@ -54,6 +55,7 @@ namespace SpinTheScrap.EditorTools
             so.FindProperty("netSessionPrefab").objectReferenceValue = prefabs.session;
             so.FindProperty("netEnemyPrefab").objectReferenceValue = prefabs.enemy;
             so.FindProperty("netScrapPrefab").objectReferenceValue = prefabs.scrap;
+            so.FindProperty("netCartPrefab").objectReferenceValue = prefabs.cart;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -63,7 +65,7 @@ namespace SpinTheScrap.EditorTools
         }
 
         /// <summary>協力プレイのプレハブ（プレイヤーの分身・共有状態）を作る。FishNet の DefaultPrefabObjects に自動で載る。</summary>
-        static (FishNet.Object.NetworkObject player, Net.NetSession session, Net.NetEnemy enemy, Net.NetScrap scrap) CreateNetworkPrefabs()
+        static (FishNet.Object.NetworkObject player, Net.NetSession session, Net.NetEnemy enemy, Net.NetScrap scrap, Net.NetCart cart) CreateNetworkPrefabs()
         {
             Directory.CreateDirectory(PrefabFolder);
             AssetDatabase.Refresh();
@@ -102,9 +104,20 @@ namespace SpinTheScrap.EditorTools
             scrapNob.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(scrap);
 
+            // 台車：物理はホストが計算する（サーバー権威の NetworkTransform）
+            var cart = LoadOrCreatePrefab(NetCartPath, go =>
+            {
+                go.AddComponent<FishNet.Object.NetworkObject>();
+                var transform = go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
+                var serialized = new SerializedObject(transform);
+                serialized.FindProperty("_clientAuthoritative").boolValue = false;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                go.AddComponent<Net.NetCart>();
+            });
+
             AssetDatabase.SaveAssets();
             return (player.GetComponent<FishNet.Object.NetworkObject>(), session.GetComponent<Net.NetSession>(), enemy.GetComponent<Net.NetEnemy>(),
-                scrap.GetComponent<Net.NetScrap>());
+                scrap.GetComponent<Net.NetScrap>(), cart.GetComponent<Net.NetCart>());
         }
 
         /// <summary>

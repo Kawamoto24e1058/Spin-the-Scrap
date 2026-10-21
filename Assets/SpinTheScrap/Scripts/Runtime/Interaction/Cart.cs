@@ -41,12 +41,24 @@ namespace SpinTheScrap.Interaction
         public Vector3 HandlePoint => transform.TransformPoint(HandleLocal);
         public float SpeedFactor => rules != null ? (float)rules.CartSpeedFactor(LoadKg) : 1f;
 
+        /// <summary>協力プレイ：このマシンで物理を計算しているか（NetCart が設定。なければ常に true）。</summary>
+        public System.Func<bool> LocalPhysics { get; set; }
+        public bool HasLocalPhysics => LocalPhysics == null || LocalPhysics();
+        /// <summary>協力プレイ：物理を計算しているホストへ「押している人の位置と向き」を送る。</summary>
+        public System.Action<Vector3, Vector3> RemotePush { get; set; }
+
         public static Cart Spawn(Transform parent, Vector3 position, Quaternion rotation, ToolRules toolRules)
         {
-            EnsureMaterials();
             var go = new GameObject("Cart");
             go.transform.SetParent(parent, true);
             go.transform.SetPositionAndRotation(position, rotation);
+            return Build(go, toolRules);
+        }
+
+        /// <summary>渡した物（協力プレイでは NetCart のプレハブ）を台車にする。</summary>
+        public static Cart Build(GameObject go, ToolRules toolRules)
+        {
+            EnsureMaterials();
 
             var frame = new Color(0.35f, 0.38f, 0.42f);
             var bed = new Color(0.45f, 0.36f, 0.25f);

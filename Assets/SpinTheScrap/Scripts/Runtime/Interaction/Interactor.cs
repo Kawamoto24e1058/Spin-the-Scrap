@@ -393,21 +393,39 @@ namespace SpinTheScrap.Interaction
         /// <summary>取っ手を自分の前に保つよう、水平の力と向きをそろえる回転をかける。</summary>
         void DrivePushed()
         {
-            var body = pushed.Body;
             var forward = Cam.transform.forward;
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.001f) forward = transform.forward;
             forward.Normalize();
 
             var handle = pushed.HandlePoint;
-            var target = transform.position + forward * cartPushDistance;
-            var offset = target - handle;
+            var offset = transform.position + forward * cartPushDistance - handle;
             offset.y = 0f;
             if (offset.magnitude > cartBreakDistance)
             {
                 StopPushing();
                 return;
             }
+            // 協力プレイで台車の物理をホストが計算しているなら、押している位置と向きだけを送る
+            if (!pushed.HasLocalPhysics)
+            {
+                pushed.RemotePush?.Invoke(transform.position, forward);
+                return;
+            }
+            PushCart(pushed, transform.position, forward);
+        }
+
+        /// <summary>
+        /// 台車を、position に立って forward を向いている人が押す（取っ手を前に保つ力と、向きをそろえる回転）。
+        /// 協力プレイのホストは、ほかの人が押す分もこれで計算する。
+        /// </summary>
+        public void PushCart(Cart cart, Vector3 position, Vector3 forward)
+        {
+            var body = cart.Body;
+            var handle = cart.HandlePoint;
+            var target = position + forward * cartPushDistance;
+            var offset = target - handle;
+            offset.y = 0f;
 
             var velocity = body.linearVelocity;
             velocity.y = 0f;
@@ -415,7 +433,7 @@ namespace SpinTheScrap.Interaction
             body.AddForce(Vector3.ClampMagnitude(force, cartMaxForce) * body.mass, ForceMode.Force);
 
             // 台車の前（+Z）を自分の向きにそろえる
-            float angle = Vector3.SignedAngle(Vector3.ProjectOnPlane(pushed.transform.forward, Vector3.up), forward, Vector3.up);
+            float angle = Vector3.SignedAngle(Vector3.ProjectOnPlane(cart.transform.forward, Vector3.up), forward, Vector3.up);
             float yawAccel = angle * Mathf.Deg2Rad * cartTurnStiffness - body.angularVelocity.y * cartTurnDamping;
             body.AddTorque(Vector3.up * yawAccel, ForceMode.Acceleration);
         }

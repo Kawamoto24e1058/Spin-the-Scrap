@@ -27,6 +27,7 @@ namespace SpinTheScrap.World
         [SerializeField] Net.NetSession netSessionPrefab;
         [SerializeField] Net.NetEnemy netEnemyPrefab;
         [SerializeField] Net.NetScrap netScrapPrefab;
+        [SerializeField] Net.NetCart netCartPrefab;
 
         RunSession session;
         FirstPersonController player;
@@ -64,6 +65,7 @@ namespace SpinTheScrap.World
             session.DisposeScrap = DisposeScrap;
             NetSession.LocalSession = session;
             NetScrap.Lookup = id => session.Content.GetSymbol(id);
+            NetCart.Rules = session.Tools;
             spawnRng = new Rng((ulong)System.Environment.TickCount);
             health.Init(session.Hazards);
             health.Downed += OnPlayerDowned;
@@ -232,6 +234,21 @@ namespace SpinTheScrap.World
             if (networkManager == null || !networkManager.IsServerStarted) return;
             foreach (var scrap in FindObjectsByType<NetScrap>())
                 if (scrap.IsSpawned) networkManager.ServerManager.Despawn(scrap.gameObject);
+            foreach (var cart in FindObjectsByType<NetCart>())
+                if (cart.IsSpawned) networkManager.ServerManager.Despawn(cart.gameObject);
+        }
+
+        /// <summary>台車を置く。協力プレイのホストではネットワークで配る（全員が押せる）。</summary>
+        void SpawnCart(Vector3 position)
+        {
+            if (mode == NetMode.Host && netCartPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netCartPrefab, position, Quaternion.identity);
+                instance.BindHost(Cart.Build(instance.gameObject, session.Tools));
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return;
+            }
+            Cart.Spawn(facility.Root, position, Quaternion.identity, session.Tools);
         }
 
         void OnDestroy()
@@ -503,8 +520,7 @@ namespace SpinTheScrap.World
             if (!session.Run.IsBossFloor)
                 for (int i = 0; i < session.Enemies.CrawlerPopulationFor(session.Run.Floor); i++) SpawnCrawler(awayFromPlayer: true);
             // 台車は道具スロットで当てていれば入口に 1 台
-            if (session.Run.HasTool(ToolIds.Cart))
-                Cart.Spawn(facility.Root, new Vector3(4f, 0.05f, -5f), Quaternion.identity, session.Tools);
+            if (session.Run.HasTool(ToolIds.Cart)) SpawnCart(new Vector3(4f, 0.05f, -5f));
             PlaceMachines(run.Floor, FloorRng(session.RunSeed, run.Floor, session.Attempt, 2));
             health.ResetHealth();
 

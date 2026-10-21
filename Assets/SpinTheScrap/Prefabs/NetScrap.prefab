@@ -64,22 +64,24 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 65535
+  <PrefabId>k__BackingField: 3
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 17002627795858612469
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 1, y: 1, z: 1}
+    IsValid: 1
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
   WasActiveDuringEdit_Set1: 1
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 456782878271122670}
+  - {fileID: 6089455605497015404}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -90,7 +92,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 1
   _defaultDespawnType: 0
-  _initializedTimestamp: 0
+  _initializedTimestamp: -8584090465894587148
 --- !u!114 &456782878271122670
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -103,9 +105,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Transforming.NetworkTransform
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4376608296759887647}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4376608296759887647}
   _componentConfiguration: 0
   _synchronizeParent: 0
   _packing:
@@ -149,6 +151,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 28c3f3a4b43824033ae7acbb03d415cf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpinTheScrap.Runtime::SpinTheScrap.Net.NetScrap
-  _componentIndexCache: 255
+  _componentIndexCache: 1
   _addedNetworkObject: {fileID: 4376608296759887647}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4376608296759887647}
