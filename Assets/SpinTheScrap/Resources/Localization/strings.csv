@@ -5,7 +5,7 @@ symbol.empty_can.desc,どこにでもある。リールの最初の住人。,It'
 symbol.rusty_screw.name,錆びたネジ,Rusty Screw
 symbol.rusty_screw.desc,隣接する金属1つにつき+1。,+1 for each adjacent Metal.
 symbol.mannequin_head.name,マネキンの首,Mannequin Head
-symbol.mannequin_head.desc,呪いが3つ以上で盤面×2。代わりに次の潜行で敵が増える。,"With 3+ Curse on the board, board ×2. More enemies next dive."
+symbol.mannequin_head.desc,呪いが3つ以上で盤面×2。代わりに次の階層で敵が増える。,"With 3+ Curse on the board, board ×2. More enemies next floor."
 symbol.broken_radio.name,壊れたラジオ,Broken Radio
 symbol.broken_radio.desc,同じ列の電化製品の効果をもう1回発動。,Retriggers Electric effects in the same column.
 symbol.chipped_lucky_cat.name,招き猫（欠け）,Chipped Lucky Cat
@@ -20,17 +20,47 @@ symbol.plush_arm.name,ぬいぐるみの片腕,Plush Arm
 symbol.plush_arm.desc,盤面の他の人形1つにつき+1。,+1 for each other Doll on the board.
 symbol.safe_door.name,金庫の扉,Safe Door
 symbol.safe_door.desc,同じ列の金属1つにつき+3。1人では持ち上がらない。,+3 for each Metal in the same column. Too heavy to lift alone.
+symbol.bent_spoon.name,曲がったスプーン,Bent Spoon
+symbol.bent_spoon.desc,隣接する食べ物1つにつき+1。,+1 for each adjacent Food.
+symbol.lunch_box.name,古い弁当箱,Old Lunch Box
+symbol.lunch_box.desc,隣接する食べ物1つにつき+3。,+3 for each adjacent Food.
+symbol.tin_robot.name,ブリキのロボット,Tin Robot
+symbol.tin_robot.desc,盤面のおもちゃ1つにつき+1。金属・電化製品でもある。,+1 for each Toy on the board. Also Metal and Electric.
+symbol.jack_in_the_box.name,びっくり箱,Jack-in-the-Box
+symbol.jack_in_the_box.desc,1/3で盤面×2。,"1 in 3: board ×2."
+symbol.old_newspaper.name,古新聞の束,Old Newspapers
+symbol.old_newspaper.desc,隣接する紙1つにつき+1。,+1 for each adjacent Paper.
+symbol.losing_ticket.name,外れ馬券,Losing Ticket
+symbol.losing_ticket.desc,盤面のギャンブル1つにつき+2。,+2 for each Gamble on the board.
+symbol.pair_of_dice.name,サイコロ,Pair of Dice
+symbol.pair_of_dice.desc,1/6で×12。外れても消えない。,"1 in 6: ×12. Never disappears."
+symbol.rusty_horseshoe.name,錆びた蹄鉄,Rusty Horseshoe
+symbol.rusty_horseshoe.desc,盤面の幸運1つにつき+1。,+1 for each Luck on the board.
+symbol.creepy_doll.name,髪の伸びる人形,Creepy Doll
+symbol.creepy_doll.desc,盤面の呪い1つにつき+2。盤面に出るたびに次の階層で敵が増える。,+2 for each Curse on the board. Each spin it shows up adds an enemy next floor.
+symbol.broken_vending_machine.name,壊れた自販機,Broken Vending Machine
+symbol.broken_vending_machine.desc,盤面の電化製品1つにつき+2。1人では持ち上がらない。,+2 for each Electric on the board. Too heavy to lift alone.
 # --- レリック ---
 relic.magnet_charm.name,磁石のお守り,Magnet Charm
 relic.magnet_charm.desc,金属タグの値+3。,Metal symbols +3.
 relic.regular_card.name,常連カード,Regular's Card
-relic.regular_card.desc,1サイクルの最初の1回は無料。,First spin each cycle is free.
+relic.regular_card.desc,各階層の最初の1回は無料。,First spin on each floor is free.
 relic.bubble_wrap.name,緩衝材,Bubble Wrap
 relic.bubble_wrap.desc,割れ物が割れても価値が半分残る。,Broken fragiles keep half their value.
 relic.cursed_glove.name,呪いの軍手,Cursed Work Glove
 relic.cursed_glove.desc,呪いタグの値×1.5。,Curse symbols ×1.5.
 relic.worn_lever.name,すり減ったレバー,Worn Lever
 relic.worn_lever.desc,回す費用×0.8。,Spin cost ×0.8.
+relic.holed_coin.name,穴あきコイン,Holed Coin
+relic.holed_coin.desc,幸運タグの値×2。,Luck symbols ×2.
+relic.toy_box_key.name,おもちゃ箱の鍵,Toy Box Key
+relic.toy_box_key.desc,おもちゃタグの値+2。,Toy symbols +2.
+relic.rubber_gloves.name,ゴム手袋,Rubber Gloves
+relic.rubber_gloves.desc,電化製品タグの値×1.5。,Electric symbols ×1.5.
+relic.gamblers_notebook.name,ギャンブラーの手帳,Gambler's Notebook
+relic.gamblers_notebook.desc,ギャンブルタグの値×1.5。,Gamble symbols ×1.5.
+relic.rusty_scale.name,錆びた秤,Rusty Scale
+relic.rusty_scale.desc,店の売値×1.25。,Shop sell prices ×1.25.
 # --- タグ ---
 tag.Metal,金属,Metal
 tag.Electric,電化製品,Electric
@@ -42,6 +72,85 @@ tag.Fragile,割れ物,Fragile
 tag.Toy,おもちゃ,Toy
 tag.Paper,紙,Paper
 tag.Food,食べ物,Food
+# --- 道具 ---
+tool.cart.name,台車,Push Cart
+tool.cart.desc,階層のたびにスタート地点に置かれる。大きい物をまとめて運べる。,Waits at the start of every floor. Haul large scrap in bulk.
+tool.insulated_boots.name,絶縁ブーツ,Insulated Boots
+tool.insulated_boots.desc,電気が流れる水たまりのダメージを30%に減らす。,Electrified puddles deal 30% damage.
+tool.battery.name,電池,Battery
+tool.battery.desc,懐中電灯の電池が切れたら自動で交換する。,Swaps in automatically when the flashlight dies.
+tool.bandage.name,包帯,Bandage
+tool.bandage.desc,[H] 体力を40回復する。,[H] Restore 40 health.
+tool.firecracker.name,爆竹,Firecracker
+tool.firecracker.desc,[Q] 投げると少しして大きな音で鳴り、敵をおびき寄せる。,[Q] Throw it; it bangs loudly a moment later and lures enemies.
+# --- 攻略条件 ---
+objective.label,攻略条件：{0}（{1}）,Objective: {0} ({1})
+objective.done,達成,Done
+objective.DefeatEnemies,敵を倒す,Defeat enemies
+objective.DefeatBoss,ボスを倒す,Defeat the boss
+# --- ランの結果 ---
+result.cleared,攻略完了！最下層から脱出した。,Run cleared! You escaped from the bottom.
+result.failed,ゲームオーバー,Game over
+result.floor,到達：地下{0}階 / {1}階,Reached: B{0} of {1}
+result.kills,倒した敵：{0}体,Enemies defeated: {0}
+result.spins,回した回数：{0}回（大当たり {1}回・最高の質 {2}）,Spins: {0} (jackpots {1}, best tier {2})
+result.time,プレイ時間：{0}分{1}秒,Play time: {0}:{1}
+# --- 始める前の画面 ---
+lobby.solo,ひとりで遊ぶ,Play solo
+lobby.host,ホストになる（協力プレイ）,Host a co-op game
+lobby.join,参加する,Join
+lobby.note,協力プレイは今はローカルネットワーク（同じ PC か LAN）でつなぎます。敵やスロットの同期は次の段階です。,Co-op currently connects over LAN or on the same PC. Enemies and slot machines sync in the next stage.
+# --- 敵 ---
+enemy.Crawler,這う者,Crawler
+enemy.Lurker,徘徊者,Lurker
+enemy.Brute,目の見えない巨体,Blind Brute
+# --- スロット台 ---
+machine.Weapon,武器スロット,Weapon Slot
+machine.Weapon.desc,武器が出る。リールで多いタグの武器、盤面の合計が大きいほど良い武器。,Gives a weapon. The reel's strongest tag picks the type; a bigger board total gives a better one.
+machine.Perk,強化スロット,Perk Slot
+machine.Perk.desc,盤面のタグの値がそのまま経験値になり、能力のレベルが上がる。,Each tag's board value becomes XP for that perk.
+machine.Mod,改造スロット,Mod Slot
+machine.Mod.desc,手に持っている武器に改造が付く（1本に3つまで）。,Adds a mod to the weapon in hand (up to 3).
+machine.Tool,道具スロット,Tool Slot
+machine.Tool.desc,包帯・爆竹・電池などの消耗品が出る。,Gives consumables like bandages, firecrackers and batteries.
+outcome.weapon,{0} を手に入れた,Got {0}
+outcome.mod,改造「{0}」が付いた,Mod added: {0}
+outcome.mod_full,改造はもう付けられない,No room for another mod
+outcome.perk,経験値 {0},XP {0}
+outcome.level_up,レベルアップ：{0},Level up: {0}
+outcome.medals,メダル {0},{0} medals
+outcome.tool,{0} ×{1},{0} ×{1}
+# --- 改造 ---
+mod.Damage,攻撃力+30%,Damage +30%
+mod.Stun,ひるませる,Stun
+mod.Lifesteal,吸収,Lifesteal
+mod.FireRate,速射,Rapid
+mod.Capacity,大容量,Extended
+mod.Cursed,呪い,Cursed
+mod.Minor,攻撃力+15%,Damage +15%
+# --- 武器 ---
+weapon.pipe.name,鉄パイプ,Iron Pipe
+weapon.pipe.desc,近接。振れる回数に限りがある。,Melee. Limited swings.
+weapon.nail_gun.name,釘打ち機,Nail Gun
+weapon.nail_gun.desc,連射できる。,Rapid fire.
+weapon.rivet_cannon.name,リベット砲,Rivet Cannon
+weapon.rivet_cannon.desc,重い一撃が敵を貫通する。,Heavy shots that pierce.
+weapon.taser.name,スタンガン,Taser
+weapon.taser.desc,近接。当てた敵をよくひるませる。,Melee. Often stuns.
+weapon.arc_gun.name,放電銃,Arc Gun
+weapon.arc_gun.desc,電撃が近くの敵に連鎖する。,Lightning chains to nearby enemies.
+weapon.arc_gun_mk2.name,放電銃・改,Arc Gun Mk2
+weapon.arc_gun_mk2.desc,電撃がより多くの敵に連鎖する。,Lightning chains further.
+weapon.firework_tube.name,花火筒,Firework Tube
+weapon.firework_tube.desc,着弾点で爆発する。,Explodes on impact.
+weapon.firework_tube_mk2.name,打ち上げ花火筒,Mortar Firework
+weapon.firework_tube_mk2.desc,大きく爆発する。,Big explosions.
+weapon.cursed_cleaver.name,呪いの包丁,Cursed Cleaver
+weapon.cursed_cleaver.desc,近接で大ダメージ。当てるたびに少し傷つく。,Huge melee damage. Hurts you a little each hit.
+weapon.cursed_cleaver_mk2.name,血塗られた包丁,Bloodied Cleaver
+weapon.cursed_cleaver_mk2.desc,さらに強いが、さらに傷つく。,Stronger and hungrier.
+weapon.cursed_cleaver_mk3.name,妖刀もどき,Wicked Blade
+weapon.cursed_cleaver_mk3.desc,最強の一撃。代償も大きい。,The strongest cut, at a cost.
 # --- 運搬区分 ---
 size.Small,小,Small
 size.Large,大,Large
@@ -50,33 +159,122 @@ size.Huge,特大,Huge
 hud.pickup,[E] 拾う,[E] Pick up
 hud.grab,[E] 抱える,[E] Carry
 hud.grab_huge,[E] 端をつかむ,[E] Grab an end
-hud.holding,[E/G] 離す  [右クリック] 投げる,[E/G] Release  [RMB] Throw
+hud.holding,[E/G] 離す  [右クリック長押し] ためて投げる,[E/G] Release  [Hold RMB] Charge and throw
+hud.holding_huge,[E/G/右クリック] 離す,[E/G/RMB] Release
 hud.inventory_full,インベントリがいっぱい,Inventory full
 hud.value,売値 {0},Sell {0}
 hud.integrity,状態 {0}%,Condition {0}%
 hud.broken,割れている,Broken
 hud.load,重量 {0} kg,Load {0} kg
-hud.extract,[F] ガラクタを運び出す（{0}個）,[F] Extract scrap ({0})
-hud.haul,運び出したガラクタ：{0}個,Extracted scrap: {0}
-hud.controls,WASD 移動 / Shift 走る / Space ジャンプ / 1-4 スロット選択 / G 落とす / L 懐中電灯 / Tab 拠点メニュー,WASD Move / Shift Run / Space Jump / 1-4 Select / G Drop / L Flashlight / Tab Base menu
+hud.haul,台に入れたガラクタ：{0}個,Scrap in the machine: {0}
+hud.health,体力 {0}/{1},Health {0}/{1}
+hud.weapon,{0}  {1}/{2},{0}  {1}/{2}
+hud.fists,素手,Bare hands
+hud.weapon_broke,武器が壊れた！,Your weapon broke!
+hud.objective_done,攻略条件を満たした！入口のエレベーターへ,Objective complete! Head to the elevator at the entrance
+hud.use_machine,[E] {0}（持っている物を入れる）,[E] {0} (feed what you carry)
+hud.elevator_locked,エレベーター：攻略条件を満たすと動く,Elevator: runs once the objective is done
+hud.elevator_ready,[E] エレベーターで地下{0}階へ,[E] Take the elevator to B{0}
+hud.elevator_exit,[E] エレベーターで脱出する,[E] Take the elevator out
+hud.tools,電池 {0}%（予備 {1}）  包帯 {2}  爆竹 {3},Battery {0}% (spare {1})  Bandage {2}  Firecracker {3}
+hud.push_cart,[E] 台車を押す,[E] Push the cart
+hud.pushing_cart,[E/G] 手を離す（速く押すとガタガタ鳴る）,[E/G] Let go (pushing fast rattles)
+hud.cart_load,台車：{0}個 / {1} kg,Cart: {0} items / {1} kg
+hud.controls,左クリック 攻撃 / E 拾う / 右クリック長押し 投げる / G 落とす / 1-4 枠 / L 懐中電灯 / H 包帯 / Q 爆竹 / R 仲間を起こす / F 引きずる / Tab スロット台,LMB Attack / E Pick up / Hold RMB Throw / G Drop / 1-4 Slot / L Flashlight / H Bandage / Q Firecracker / R Revive / F Drag / Tab Slot machine
 # --- 拠点メニュー ---
-base.title,拠点（ボロアパート）,Base (Shabby Apartment)
-base.status,サイクル {0}  潜行 {1}/{2}  所持金 {3}  ノルマ {4},Cycle {0}  Dive {1}/{2}  Money {3}  Quota {4}
-base.endless,エンドレス,Endless
-base.haul,持ち帰ったガラクタ,Haul
-base.sell,売る {0},Sell {0}
-base.to_reel,リールに入れる,Add to reel
+base.status,地下 {0}/{1}階  残機 {2}  メダル {3},Floor B{0}/{1}  Lives {2}  Medals {3}
+base.haul,台に入れたガラクタ,Scrap in the machine
 base.reel,リールの中身（{0}個）,Reel ({0})
 base.remove,廃棄 {0},Discard {0}
 base.spin,レバーを引く（{0}）,Pull the lever ({0})
-base.last_spin,前回の結果：+{0}  ライン{1}本  盤面×{2},Last spin: +{0}  {1} lines  Board ×{2}
 base.relics,レリック（{0}/{1}）,Relics ({0}/{1})
 base.black_market,闇市,Black Market
 base.buy,買う {0},Buy {0}
-base.next_dive,次の潜行へ,Next dive
-base.payday,返済日：{0} を支払う,Payday: pay {0}
-base.paid,返済完了。次のサイクルへ。,Paid. On to the next cycle.
-base.cleared,完済！以降はエンドレス。,Debt cleared! Endless mode from here.
-base.failed,ノルマ未達。ラン終了。,Quota missed. Run over.
+base.cleared,最下層まで攻略した！,You reached the bottom!
 base.new_run,新しいラン,New run
-base.enemy_bonus,次の潜行で敵 +{0},Next dive enemies +{0}
+base.enemy_bonus,次の階層で敵 +{0},Next floor enemies +{0}
+base.tool_count,{0}/{1}個,{0}/{1}
+base.downed_over,倒れた。持っていたガラクタ{0}個を失った。残機がなくなった。,You went down and lost {0} scrap. No lives left.
+base.to_reel,この台のリールに入れる,Add to this reel
+base.last_spin,{0}：合計 {1}  ライン{2}本  系統 {3}  質 {4},{0}: total {1}  {2} lines  type {3}  tier {4}
+base.jackpot,大当たり！全員に強化が入る。とても大きな音が鳴った。,Jackpot! Everyone gets perk XP. That was very loud.
+base.loadout,装備と強化,Loadout
+base.weapon,武器：{0}（{1}/{2}）,Weapon: {0} ({1}/{2})
+base.no_weapon,武器：素手,Weapon: bare hands
+base.perks,強化：{0},Perks: {0}
+base.mod_needs_weapon,改造するには武器が必要（改造は1本に3つまで）,You need a weapon to mod (up to 3 mods each)
+base.to_medals,換金 {0},Cash in {0}
+base.retry_floor,地下{0}階をやり直す,Retry floor B{0}
+base.next_floor,エレベーターで地下{0}階へ,Take the elevator to B{0}
+base.finish_run,エレベーターで脱出する,Take the elevator out
+base.objective_pending,攻略条件を満たすとエレベーターが動く,The elevator runs once the objective is done
+base.next_floor_message,地下{0}階に着いた。,Arrived at floor B{0}.
+base.objective_done,攻略条件を満たした！エレベーターが動く。,Objective complete! The elevator is running.
+base.downed,倒れた。持っていたガラクタ{0}個を失った。残機 {1}。,You went down. Lost {0} scrap you were carrying. {1} lives left.
+hud.revive,[R 長押し] 仲間を起こす  [F] 引きずる,[Hold R] Revive your teammate  [F] Drag
+hud.reviving,仲間を起こしています… {0}%,Reviving your teammate... {0}%
+hud.dragging,[F] 仲間を離す  [R 長押し] 起こす,[F] Let go  [Hold R] Revive
+base.wait_rescue,倒れた。仲間がそばで R を押し続けると起こしてもらえる（残機は減らない）。,You are down. A teammate can revive you by holding R next to you (no life lost).
+base.give_up,あきらめて入口で起き上がる（残機 {0} → 1 減る）,Give up and get up at the entrance (lives {0} → lose 1)
+panel.floor,地下 {0} / {1}階,Floor B{0} / {1}
+panel.lives,残機 {0},Lives {0}
+panel.medals,メダル {0},Medals {0}
+panel.spinning,リールが回っている…,The reels are spinning...
+panel.reading,合計 {0}　ライン {1}本　系統 {2}　{3},Total {0}   {1} lines   type {2}   {3}
+panel.line,ライン{0}　×{1}　{2}　+{3},Line {0}   ×{1}   {2}   +{3}
+panel.corners,四隅　+{0},Corners   +{0}
+panel.haul_empty,台の前で E を押すと、持っている物と台の前の床に置いた物が入る。,Press E at a machine to feed what you carry and what lies on the floor in front of it.
+cabinet.jackpot,大当たり！,JACKPOT!
+cabinet.total,合計 {0},TOTAL {0}
+cabinet.cost,1回 {0}枚　手持ち {1}枚,Spin {0}   You have {1}
+machine.Weapon.short,武器,Weapon
+machine.Perk.short,強化,Perk
+machine.Mod.short,改造,Mod
+machine.Tool.short,道具,Tool
+panel.spin_at_machine,{0}は、その台の前でレバーを引く。ここではリールの中身を見て、ガラクタを入れられる。,Pull the lever at the {0} itself. Here you can view its reel and add scrap to it.
+panel.close,閉じる（E / Esc）,Close (E / Esc)
+panel.step_haul,① 台に入れたガラクタ（{0}個）,① Scrap in the machine ({0})
+panel.step_spin,② レバーを引く,② Pull the lever
+panel.step_reel,③ この台のリール（{0}個）,③ This machine's reel ({0})
+panel.condition,状態 {0}%,condition {0}%
+panel.cash_in,換金 +{0}枚,Cash in +{0}
+panel.add_to_reel,リールに入れる,Add to reel
+panel.pull,レバーを引く　メダル {0}枚,Pull the lever   {0} medals
+panel.need_medals,メダルがあと {0}枚 足りない。ガラクタを換金しよう。,You need {0} more medals. Cash in some scrap.
+panel.spin_note,引くたびに値段が上がる（次の階層で元に戻る）。回すと大きな音で敵が寄ってくる。,Each pull costs more (resets next floor). Spinning is loud and draws enemies.
+panel.reel_empty,リールが空。ガラクタを入れよう。,The reel is empty. Add some scrap.
+panel.reel_note,多いタグほど盤面にそろいやすく、その効果が出やすい。,The more of a tag the reel holds the more often it lines up and the more likely its reward.
+panel.reel_list,中身を見る・廃棄する,Show contents / discard
+help.title,遊び方,How it works
+help.show,開く,Show
+help.hide,たたむ,Hide
+help.step1,① 拾ったガラクタを持って台の前で E。持っている物と、台の前の床に置いた物がまとめて入る。,① Bring scrap and press E at the machine. What you carry and what lies on the floor in front of it go in.
+help.step2,② 入れた物は「換金」してメダルにするか、「リールに入れる」かを選ぶ。リールに入れた物が、この台の絵柄になる。,② Cash each item in for medals or add it to the reel. What is in the reel becomes this machine's symbols.
+help.step3,③ メダルを払ってレバーを引く。リールの中から 15 マス（3段×5列）に並ぶ。,③ Pay medals and pull the lever. Symbols from the reel fill 15 cells (3 rows × 5 columns).
+help.lines,同じタグの絵柄が左の列から 3 つ以上つながると「ライン」でボーナス。盤面の合計が大きいほど良い物が出る（★の数）。,Matching tags connected from the left for 3 or more cells form a line bonus. A bigger board total gives a better reward (stars).
+help.Weapon,武器スロット：武器が出る。盤面でいちばん多いタグで武器の種類が決まる。,Weapon Slot: gives a weapon. The tag that dominates the board picks the type.
+help.Perk,強化スロット：盤面のタグの値がそのまま経験値になり、そのタグの能力が上がる。,Perk Slot: each tag's board value becomes XP and raises that tag's perk.
+help.Mod,改造スロット：手に持っている武器に改造が付く（1本に3つまで）。多いタグで改造の種類が決まる。,Mod Slot: adds a mod to your weapon (up to 3). The dominant tag picks the mod.
+help.Tool,道具スロット：多いタグで道具が決まる。合う道具がないタグはメダルになる。,Tool Slot: the dominant tag picks the item. Tags without an item pay out medals.
+reward.weapon_default,鉄パイプなど（金属の武器）,Metal weapons such as the pipe
+reward.perk.Metal,攻撃力が上がる,More damage
+reward.perk.Electric,攻撃で敵がひるみやすい,Attacks stun more often
+reward.perk.Curse,攻撃力が大きく上がる（受けるダメージも増える）,Much more damage (you take more too)
+reward.perk.Doll,敵に見つかりにくい,Harder for enemies to spot you
+reward.perk.Luck,会心が出やすい,More critical hits
+reward.perk.Gamble,換金のレートが上がる,Better cash-in rate
+reward.perk.Fragile,足が速くなる,Faster movement
+reward.perk.Toy,爆発の範囲が広がる,Bigger explosions
+reward.perk.Paper,近くの敵が壁越しに見える,See nearby enemies through walls
+reward.perk.Food,最大体力が上がる（Lv3 で倒すと回復）,More max health (Lv3: heal on kill)
+reward.tool.Food,包帯,Bandages
+reward.tool.Toy,爆竹,Firecrackers
+reward.tool.Doll,爆竹,Firecrackers
+reward.tool.Electric,電池（質★3で絶縁ブーツ）,Batteries (★3: insulated boots)
+reward.tool.Metal,質★3で台車（それ以外はメダル）,★3: a cart (otherwise medals)
+reward.tool.Curse,メダル,Medals
+reward.tool.Luck,メダル,Medals
+reward.tool.Gamble,メダル,Medals
+reward.tool.Fragile,メダル,Medals
+reward.tool.Paper,メダル,Medals
+hud.click_to_resume,画面をクリックすると操作に戻る,Click the screen to resume

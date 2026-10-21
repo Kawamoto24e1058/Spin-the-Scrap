@@ -7,11 +7,14 @@ namespace SpinTheScrap.Player
     {
         [SerializeField] float range = 18f;
         [SerializeField] float spotAngle = 55f;
-        [SerializeField] float intensity = 3f;
+        [Tooltip("URP は距離の 2 乗で減衰する。10m 先の壁がうっすら見える程度")]
+        [SerializeField] float intensity = 14f;
 
         Light spot;
 
         public bool IsOn => spot != null && spot.enabled;
+        /// <summary>光の広がり（円錐の全角、度）。敵が「照らされた」と判断するのに使う。</summary>
+        public float SpotAngle => spotAngle;
 
         void Awake()
         {
@@ -28,5 +31,6 @@ namespace SpinTheScrap.Player
         }
 
         public void Toggle() => spot.enabled = !spot.enabled;
+        public void SetOn(bool on) => spot.enabled = on;
     }
 }

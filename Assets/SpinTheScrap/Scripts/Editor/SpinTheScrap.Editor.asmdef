@@ -3,7 +3,10 @@
     "rootNamespace": "SpinTheScrap.EditorTools",
     "references": [
         "SpinTheScrap.Core",
-        "SpinTheScrap.Runtime"
+        "SpinTheScrap.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "FishNet.Runtime"
     ],
     "includePlatforms": [
         "Editor"

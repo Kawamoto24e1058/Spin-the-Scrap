@@ -37,7 +37,46 @@ namespace SpinTheScrap.World
             { "mannequin_head", new Look(PrimitiveType.Sphere, new Vector3(0.45f, 0.5f, 0.45f), new Color(0.9f, 0.8f, 0.7f)) },
             { "cracked_mirror", new Look(PrimitiveType.Cube, new Vector3(0.6f, 0.9f, 0.08f), new Color(0.6f, 0.85f, 0.95f)) },
             { "safe_door", new Look(PrimitiveType.Cube, new Vector3(1.6f, 0.25f, 1.4f), new Color(0.25f, 0.27f, 0.3f)) },
+            { "bent_spoon", new Look(PrimitiveType.Cube, new Vector3(0.04f, 0.02f, 0.2f), new Color(0.8f, 0.8f, 0.82f)) },
+            { "lunch_box", new Look(PrimitiveType.Cube, new Vector3(0.45f, 0.18f, 0.3f), new Color(0.3f, 0.5f, 0.75f)) },
+            { "tin_robot", new Look(PrimitiveType.Cube, new Vector3(0.12f, 0.22f, 0.1f), new Color(0.7f, 0.65f, 0.4f)) },
+            { "jack_in_the_box", new Look(PrimitiveType.Cube, new Vector3(0.4f, 0.4f, 0.4f), new Color(0.85f, 0.25f, 0.2f)) },
+            { "old_newspaper", new Look(PrimitiveType.Cube, new Vector3(0.3f, 0.06f, 0.4f), new Color(0.8f, 0.78f, 0.68f)) },
+            { "losing_ticket", new Look(PrimitiveType.Cube, new Vector3(0.18f, 0.01f, 0.08f), new Color(0.6f, 0.85f, 0.6f)) },
+            { "pair_of_dice", new Look(PrimitiveType.Cube, new Vector3(0.07f, 0.07f, 0.07f), new Color(0.95f, 0.95f, 0.95f)) },
+            { "rusty_horseshoe", new Look(PrimitiveType.Cylinder, new Vector3(0.16f, 0.015f, 0.16f), new Color(0.5f, 0.32f, 0.2f)) },
+            { "creepy_doll", new Look(PrimitiveType.Capsule, new Vector3(0.3f, 0.4f, 0.3f), new Color(0.92f, 0.88f, 0.86f)) },
+            { "broken_vending_machine", new Look(PrimitiveType.Cube, new Vector3(1.0f, 1.8f, 0.8f), new Color(0.6f, 0.15f, 0.15f)) },
         };
+
+        /// <summary>見た目（形・大きさ・色）。スロット台のリールに小さな模型を並べるのにも使う。</summary>
+        public static void LookOf(SymbolDefinition def, out PrimitiveType shape, out Vector3 scale, out Color color)
+        {
+            var look = Looks.TryGetValue(def.Id, out var l) ? l : DefaultLook(def);
+            shape = look.Shape;
+            scale = look.Scale;
+            color = look.Color;
+        }
+
+        /// <summary>
+        /// 協力プレイ用：渡した物（NetScrap のプレハブ）を本体にして、見た目は子に作る。
+        /// 本体の大きさを 1 のままにしておくため（NetworkTransform が位置と向きだけを配る）。
+        /// </summary>
+        public static Scrap CreateOn(GameObject root, SymbolDefinition def, Vector3 position, Quaternion rotation)
+        {
+            var look = Looks.TryGetValue(def.Id, out var l) ? l : DefaultLook(def);
+            root.transform.SetPositionAndRotation(position, rotation);
+            var visual = GameObject.CreatePrimitive(look.Shape);
+            visual.name = "Visual";
+            visual.transform.SetParent(root.transform, false);
+            visual.transform.localScale = look.Scale;
+            visual.GetComponent<Renderer>().sharedMaterial = MaterialUtil.Create(look.Color);
+            root.name = def.Id;
+            var scrap = root.GetComponent<Scrap>();
+            if (scrap == null) scrap = root.AddComponent<Scrap>();
+            scrap.Configure(def.Id, def.Size, def.Fragile);
+            return scrap;
+        }
 
         public static Scrap Create(SymbolDefinition def, Vector3 position, Quaternion rotation, Transform parent, GameObject modelPrefab = null)
         {

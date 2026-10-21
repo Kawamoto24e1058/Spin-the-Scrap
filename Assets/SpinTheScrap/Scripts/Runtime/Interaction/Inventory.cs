@@ -5,7 +5,7 @@ using UnityEngine;
 namespace SpinTheScrap.Interaction
 {
     /// <summary>
-    /// 小さいガラクタを入れるインベントリ枠。入れたガラクタは非アクティブにして持ち運ぶ。
+    /// 小さいガラクタを入れるインベントリ枠。入れたガラクタは見えなくして（Scrap.SetStowed）持ち運ぶ。
     /// 将来は道具（懐中電灯・スキャナーなど）も枠を消費する（要件書 4.2）。
     /// </summary>
     public sealed class Inventory : MonoBehaviour
@@ -56,7 +56,8 @@ namespace SpinTheScrap.Interaction
             int index = slots[SelectedIndex] == null ? SelectedIndex : System.Array.IndexOf(slots, null);
             if (index < 0) return false;
             slots[index] = scrap;
-            scrap.gameObject.SetActive(false);
+            scrap.NotifyClaimed();
+            scrap.SetStowed(true);
             return true;
         }
 

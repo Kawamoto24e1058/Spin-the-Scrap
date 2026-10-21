@@ -1,76 +1,424 @@
 using System.Collections.Generic;
 using System.Linq;
 using SpinTheScrap.Core;
+using SpinTheScrap.Enemies;
 using SpinTheScrap.Interaction;
+using SpinTheScrap.Net;
 using SpinTheScrap.Player;
 using SpinTheScrap.Session;
 using SpinTheScrap.UI;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace SpinTheScrap.World
 {
     /// <summary>
-    /// フェーズ 0（手触り検証）用の 1 部屋を、空のシーンからコードだけで組み立てる。
+    /// フェーズ 0（手触り検証）用の施設を、空のシーンからコードだけで組み立てる。
+    /// 間取りは潜行ごとに FacilityLayout（Core）で作り直す。入口の部屋に脱出地点がある。
     /// 一人称移動・拾う・運ぶ・投げる・落とす・脱出 →（拠点メニューで）売る/リール/スロット までを 1 人で試せる。
     /// アートは仮素材（箱・カプセル）。シーンに置くのはこのコンポーネント 1 つだけでよい。
     /// </summary>
     public sealed class Phase0Bootstrap : MonoBehaviour
     {
         [SerializeField] Vector3 playerSpawn = new Vector3(0f, 1.1f, -8f);
-        [SerializeField] int scrapPerDive = 16;
-        [Tooltip("フェーズ 1 で 2 人目が入るまでは 0 固定")]
-        [SerializeField] int localOwnerId;
-
-        static readonly Color WallColor = new Color(0.22f, 0.25f, 0.21f);
-        static readonly Color FloorColor = new Color(0.18f, 0.17f, 0.15f);
-        static readonly Color PropColor = new Color(0.3f, 0.26f, 0.22f);
+        [Tooltip("協力プレイ用（Create Phase 0 Scene が設定する）")]
+        [SerializeField] FishNet.Managing.NetworkManager networkManager;
+        [SerializeField] Net.NetSession netSessionPrefab;
+        [SerializeField] Net.NetEnemy netEnemyPrefab;
+        [SerializeField] Net.NetScrap netScrapPrefab;
+        [SerializeField] Net.NetCart netCartPrefab;
 
         RunSession session;
         FirstPersonController player;
         Interactor interactor;
-        ExtractionZone zone;
+        PlayerHealth health;
+        MachineCabinet currentCabinet;
         Flashlight flashlight;
         BasePanel basePanel;
         Transform scrapRoot;
+        BuiltFacility facility;
         Rng spawnRng;
         bool panelWasVisible;
-
-        readonly List<Vector3> floorSpots = new List<Vector3>();
-        readonly List<Vector3> raisedSpots = new List<Vector3>();
+        bool wasOver;
+        bool flashlightWasOn;
+        CabinetContext cabinetContext;
+        // 協力プレイ：倒れて仲間を待っている（あきらめたら残機が減る）
+        bool awaitingRescue;
+        int lostWhenDowned;
+        PlayerCombat combat;
+        ViewFocus viewFocus;
+        float floorStartTime;
+        float nextCrawlerTime;
+        readonly List<Enemy> crawlers = new List<Enemy>();
 
         void Awake()
         {
             DisableOtherCameras();
             BuildLighting();
-            BuildRoom();
-            BuildExtractionZone();
             BuildPlayer();
 
             session = GetComponent<RunSession>();
             if (session == null) session = gameObject.AddComponent<RunSession>();
-            session.DiveStarted += OnDiveStarted;
+            session.FloorStarted += OnFloorStarted;
+            session.RespawnRequested += Respawn;
+            session.DisposeScrap = DisposeScrap;
+            NetSession.LocalSession = session;
+            NetScrap.Lookup = id => session.Content.GetSymbol(id);
+            NetCart.Rules = session.Tools;
             spawnRng = new Rng((ulong)System.Environment.TickCount);
+            health.Init(session.Hazards);
+            health.Downed += OnPlayerDowned;
+            NoiseEvents.Rules = session.Enemies;
+            player.GetComponent<PlayerNoise>().Init(session.Enemies);
+            combat.Init(session);
+            Enemy.AnyDied += OnEnemyDied;
+            Enemy.SummonRequested = SummonMinion;
 
             var hud = gameObject.AddComponent<Phase0Hud>();
-            hud.Init(session, player, interactor, zone);
+            hud.Init(session, player, interactor, health);
+            session.Spun += OnSpun;
             basePanel = gameObject.AddComponent<BasePanel>();
             basePanel.Init(session);
+            basePanel.OutcomeHidden = () => basePanel.Docked && currentCabinet != null && currentCabinet.View.IsSpinning;
+            cabinetContext = new CabinetContext
+            {
+                Strings = session.Strings,
+                Symbol = id => session.Content.GetSymbol(id),
+                Reel = kind => session.Run.ReelOf(kind),
+                Status = kind => session.Strings.Format("cabinet.cost", session.Medals(session.Run.CostOf(kind)), session.Medals(session.Run.Medals)),
+            };
+            gameObject.AddComponent<TeammateAssist>().Init(player, health, session.Hazards, session.Strings);
+            NetPlayer.Revived += OnRevived;
+            NetPlayer.DraggedTo += OnDragged;
 
-            OnDiveStarted(0);
+            NetPlayer.LocalTarget = player.transform;
+            NetPlayer.LocalHealth = health;
+            // 敵が狙えるプレイヤーとして、このマシンのプレイヤーを登録する（協力プレイのほかの人は NetPlayer が登録する）
+            var view = player.ViewCamera.transform;
+            PlayerTargets.All.Add(new PlayerTarget
+            {
+                Body = player.transform,
+                Eye = () => view.position,
+                Collider = player.Controller,
+                IsDown = () => health.IsDown,
+                Damage = amount => health.Damage(amount),
+                Flashlight = flashlight,
+                View = view,
+            });
+            gameObject.AddComponent<NetLobby>().Init(session.Strings, Begin);
+        }
+
+        // ---- ひとり・ホスト・参加 ----
+
+        NetMode mode = NetMode.Solo;
+        bool started;
+        bool hostWaiting;
+        (ulong seed, int floor, int attempt) builtFor;
+
+        bool IsClientOnly => mode == NetMode.Client;
+
+        /// <summary>始める前の画面で選んだ遊び方で始める。</summary>
+        void Begin(NetMode chosen, string address)
+        {
+            mode = chosen;
+            started = true;
             SetCursorLocked(true);
+            if (mode != NetMode.Solo && networkManager == null)
+            {
+                Debug.LogWarning("[Spin the Scrap] NetworkManager がありません。Create Phase 0 Scene でシーンを作り直してください。ひとりで始めます。");
+                mode = NetMode.Solo;
+            }
+            session.CoopRespawn = mode != NetMode.Solo;
+            if (mode == NetMode.Client) session.Remote = new RemoteRun(); // ランを変える操作はホストへ送る
+            switch (mode)
+            {
+                case NetMode.Host:
+                    // 階層はサーバーが立ち上がってから組み立てる（敵をネットワークに配るため。Update で待つ）
+                    networkManager.ServerManager.StartConnection();
+                    networkManager.ClientManager.StartConnection();
+                    hostWaiting = true;
+                    break;
+                case NetMode.Client:
+                    networkManager.ClientManager.StartConnection(address);
+                    break;
+                default:
+                    OnFloorStarted(0);
+                    break;
+            }
+        }
+
+        /// <summary>ホスト：今の階層を全員に配る（NetSession がなければ作る）。</summary>
+        void PublishFloor()
+        {
+            if (mode != NetMode.Host || networkManager == null || !networkManager.IsServerStarted) return;
+            if (NetSession.Instance == null && netSessionPrefab != null)
+            {
+                var nob = Instantiate(netSessionPrefab);
+                networkManager.ServerManager.Spawn(nob.gameObject);
+            }
+            if (NetSession.Instance != null) NetSession.Instance.Publish(session.RunSeed, session.Run.Floor, session.Attempt);
+        }
+
+        /// <summary>
+        /// クライアント：ホストが配った階層を組み立てる（間取り・スロット台・水たまり）。
+        /// 敵とガラクタはホストがネットワークで配り、ランの状態は NetSession から写す。
+        /// </summary>
+        void UpdateClientFloor()
+        {
+            var net = NetSession.Instance;
+            if (net == null || net.RunSeed == 0) return;
+            var key = (net.RunSeed, net.Floor, net.Attempt);
+            if (key == builtFor) return;
+            builtFor = key;
+            if (scrapRoot != null) Destroy(scrapRoot.gameObject);
+            if (facility != null) Destroy(facility.Root.gameObject);
+            var config = session.Run.Config;
+            var layout = config.IsBossFloor(net.Floor)
+                ? FacilityLayout.CreateBossFloor()
+                : FacilityLayout.Generate(FacilityLayout.SeedFor(net.RunSeed, net.Floor, net.Attempt), config.RoomCountFor(net.Floor));
+            facility = FacilityBuilder.Build(layout);
+            scrapRoot = new GameObject("Scrap").transform;
+            interactor.Inventory.TakeAll(); // 前の階層の物はホストが消している
+            awaitingRescue = false; // 仲間がエレベーターで次の階層へ連れて行ってくれた
+            SpawnHazards(net.RunSeed, net.Floor, net.Attempt);
+            PlaceMachines(net.Floor, FloorRng(net.RunSeed, net.Floor, net.Attempt, 2));
+            basePanel.OnDownedScreen = false;
+            Respawn();
+        }
+
+        /// <summary>階層ごとに全員で同じになる乱数（水たまり・奥の台の種類。ホストもクライアントも同じ値になる）。</summary>
+        static Rng FloorRng(ulong runSeed, int floor, int attempt, ulong salt) =>
+            new Rng(FacilityLayout.SeedFor(runSeed, floor, attempt) ^ (0x9E3779B97F4A7C15UL * salt));
+
+        /// <summary>協力プレイで倒れたあと：入口で起き上がる（階層はそのまま）。仲間を待たずにあきらめたら残機が減る。</summary>
+        void Respawn()
+        {
+            if (awaitingRescue) session.ReportDowned(lostWhenDowned);
+            awaitingRescue = false;
+            basePanel.OnDownedScreen = false;
+            health.ResetHealth();
+            var offset = mode == NetMode.Client ? Vector3.right * 1.5f : Vector3.zero;
+            player.Teleport(playerSpawn + offset, Quaternion.identity);
+        }
+
+        /// <summary>仲間に起こしてもらった：その場で起き上がる（残機は減らない）。</summary>
+        void OnRevived()
+        {
+            if (!health.Revive(session.Hazards.ReviveHealthFraction)) return;
+            awaitingRescue = false;
+            basePanel.OnDownedScreen = false;
+            basePanel.Visible = false;
+        }
+
+        /// <summary>倒れている間に仲間に引きずられた。</summary>
+        void OnDragged(Vector3 position)
+        {
+            if (!health.IsDown) return;
+            var delta = position - player.transform.position;
+            delta.y = 0f;
+            player.Controller.Move(Vector3.ClampMagnitude(delta, 0.8f));
+        }
+
+        /// <summary>台に入れた・倒れて失ったガラクタを片付ける。ネットワークの物はホストが消す。</summary>
+        static void DisposeScrap(Scrap scrap)
+        {
+            if (scrap == null) return;
+            var net = scrap.GetComponent<NetScrap>();
+            if (net != null && net.IsSpawned) net.Discard();
+            else Destroy(scrap.gameObject);
+        }
+
+        void DespawnNetworkScrap()
+        {
+            if (networkManager == null || !networkManager.IsServerStarted) return;
+            foreach (var scrap in FindObjectsByType<NetScrap>())
+                if (scrap.IsSpawned) networkManager.ServerManager.Despawn(scrap.gameObject);
+            foreach (var cart in FindObjectsByType<NetCart>())
+                if (cart.IsSpawned) networkManager.ServerManager.Despawn(cart.gameObject);
+        }
+
+        /// <summary>台車を置く。協力プレイのホストではネットワークで配る（全員が押せる）。</summary>
+        void SpawnCart(Vector3 position)
+        {
+            if (mode == NetMode.Host && netCartPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netCartPrefab, position, Quaternion.identity);
+                instance.BindHost(Cart.Build(instance.gameObject, session.Tools));
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return;
+            }
+            Cart.Spawn(facility.Root, position, Quaternion.identity, session.Tools);
         }
 
         void OnDestroy()
         {
-            if (session != null) session.DiveStarted -= OnDiveStarted;
+            if (session != null)
+            {
+                session.FloorStarted -= OnFloorStarted;
+                session.RespawnRequested -= Respawn;
+                session.Spun -= OnSpun;
+            }
+            if (health != null) health.Downed -= OnPlayerDowned;
+            Enemy.AnyDied -= OnEnemyDied;
+            Enemy.SummonRequested = null;
+            NetPlayer.Revived -= OnRevived;
+            NetPlayer.DraggedTo -= OnDragged;
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+        }
+
+        /// <summary>倒れたら、持っている物をすべて失って拠点に戻る。運び出し済みの物は残る。</summary>
+        void OnPlayerDowned()
+        {
+            interactor.ReleaseHeld();
+            var lost = interactor.Inventory.TakeAll();
+            foreach (var scrap in lost) DisposeScrap(scrap);
+            if (session.CoopRespawn)
+            {
+                // 協力プレイ：仲間が起こしてくれるのを待つ。あきらめたら残機が減る（Respawn）
+                awaitingRescue = true;
+                lostWhenDowned = lost.Count;
+            }
+            else
+            {
+                session.ReportDowned(lost.Count);
+            }
+            basePanel.OnDownedScreen = true;
+            basePanel.Visible = true;
+        }
+
+        /// <summary>
+        /// 敵が倒された：攻略条件を進め、倒した人の回復（食べ物の強化）と、這う者はガラクタを落とすことがある。
+        /// </summary>
+        void OnEnemyDied(Enemy enemy)
+        {
+            var run = session.Run;
+            if (run.ReportKill(EnemyRules.IsBoss(enemy.Kind)))
+            {
+                session.NotifyObjectiveComplete();
+                Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f);
+            }
+            // 倒した人が回復する（食べ物の強化）。協力プレイでクライアントが倒したら、その人へ送る
+            int killer = enemy.LastAttacker >= 0 ? enemy.LastAttacker : session.LocalPlayerId;
+            var stats = run.StatsOf(killer);
+            if (stats.HealOnKill > 0)
+            {
+                if (killer == session.LocalPlayerId) health.Heal(stats.HealOnKill);
+                else
+                {
+                    var player = FindObjectsByType<NetPlayer>().FirstOrDefault(p => p.OwnerId == killer);
+                    if (player != null) player.HealFromKill((float)stats.HealOnKill);
+                }
+            }
+            crawlers.Remove(enemy);
+
+            if (enemy.Kind == EnemyKind.Crawler && spawnRng.NextDouble() < session.Enemies.CrawlerScrapDropChance)
+                DropScrap(enemy.transform.position, 0);
+            else if (EnemyRules.IsBoss(enemy.Kind))
+                for (int i = 0; i < 6; i++) DropScrap(enemy.transform.position + Random.insideUnitSphere * 1.5f, 3);
+        }
+
+        /// <summary>敵が落とすガラクタ。depth が深いほど珍しい物が出やすい。</summary>
+        void DropScrap(Vector3 position, int depth)
+        {
+            var others = session.Content.Symbols.Where(s => s.Size == ScrapSize.Small).ToList();
+            if (others.Count == 0) return;
+            Place(PickWeighted(others, depth), new Vector3(position.x, Mathf.Max(0.1f, position.y - 0.5f), position.z));
+        }
+
+        /// <summary>強化で決まる能力値を、体力・移動・被ダメージに反映する（強化スロットを回すと変わる）。</summary>
+        void ApplyStats()
+        {
+            var stats = session.Run.StatsOf(session.LocalPlayerId);
+            if (health.State != null && !health.IsDown && System.Math.Abs(health.State.Max - stats.MaxHealth) > 0.01)
+                health.State.SetMax(stats.MaxHealth);
+            health.DamageTakenMultiplier = stats.DamageTakenMultiplier;
+            player.PerkSpeedMultiplier = (float)stats.MoveSpeedMultiplier;
+            Enemy.PlayerStealth = stats.Stealth;
+        }
+
+        /// <summary>通常の階では、倒された這う者が湧き直す。階層に長くいるほど早く湧く（長居するほど危ない）。</summary>
+        void UpdateCrawlers()
+        {
+            if (session.Run.IsBossFloor || facility == null || IsClientOnly) return;
+            crawlers.RemoveAll(c => c == null);
+            int population = session.Enemies.CrawlerPopulationFor(session.Run.Floor);
+            if (crawlers.Count >= population || Time.time < nextCrawlerTime) return;
+            nextCrawlerTime = Time.time + (float)session.Enemies.CrawlerRespawnSeconds(Time.time - floorStartTime);
+            SpawnCrawler(awayFromPlayer: true);
+        }
+
+        /// <summary>
+        /// 敵を置く。協力プレイのホストではネットワークで配る（NetEnemy のプレハブに本体を組み立てて Spawn）。
+        /// ネットワークの敵は施設の子にせず、階層を移るときに DespawnNetworkEnemies で消す。
+        /// </summary>
+        Enemy SpawnEnemy(EnemyKind kind, Vector3 position)
+        {
+            int floor = session.Run.Floor;
+            if (mode == NetMode.Host && netEnemyPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netEnemyPrefab);
+                var enemy = Enemy.Spawn(kind, floor, null, position, session.Enemies, facility, spawnRng.NextULong(), instance.gameObject);
+                instance.BindHost(enemy);
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return enemy;
+            }
+            return Enemy.Spawn(kind, floor, facility.Root, position, session.Enemies, facility, spawnRng.NextULong());
+        }
+
+        void DespawnNetworkEnemies()
+        {
+            if (networkManager == null || !networkManager.IsServerStarted) return;
+            foreach (var enemy in FindObjectsByType<NetEnemy>())
+                if (enemy.IsSpawned) networkManager.ServerManager.Despawn(enemy.gameObject);
+        }
+
+        /// <summary>群れを呼ぶ人形が呼んだ這う者。</summary>
+        Enemy SummonMinion(Enemy summoner, Vector3 position)
+        {
+            if (facility == null) return null;
+            return SpawnEnemy(EnemyKind.Crawler, new Vector3(position.x, 0f, position.z));
+        }
+
+        void SpawnCrawler(bool awayFromPlayer)
+        {
+            var playerRoom = facility.RoomAt(player.transform.position);
+            var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance && (!awayFromPlayer || r.Plan != playerRoom)).ToList();
+            if (rooms.Count == 0) return;
+            var room = rooms[spawnRng.Next(rooms.Count)];
+            var offset = new Vector3((float)(spawnRng.NextDouble() * 12 - 6), 0f, (float)(spawnRng.NextDouble() * 12 - 6));
+            var enemy = SpawnEnemy(EnemyKind.Crawler, FacilityBuilder.RoomCenter(room.Plan) + offset);
+            crawlers.Add(enemy);
         }
 
         void Update()
         {
-            if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
+            if (!started) return; // 始める前の画面
+            if (hostWaiting)
+            {
+                if (!networkManager.IsServerStarted) return;
+                hostWaiting = false;
+                OnFloorStarted(0);
+            }
+            if (mode == NetMode.Host && NetSession.Instance == null) PublishFloor(); // サーバーが立ち上がったら配る
+            if (mode == NetMode.Host && NetSession.Instance != null) NetSession.Instance.PublishState(session);
+            if (IsClientOnly) UpdateClientFloor();
+            // ランが終わったら（誰がエレベーターに乗っても・残機が尽きても）結果を見せる
+            if (session.Run.IsOver && !wasOver) basePanel.Visible = true;
+            wasOver = session.Run.IsOver;
+            // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
+            if (health.IsDown) basePanel.Visible = true;
+            else if (GameInput.BaseMenuPressed)
+            {
+                basePanel.Visible = !basePanel.Visible;
+                currentCabinet = null; // Tab で開いたメニューは台から離れていても使える（台は映さない）
+            }
+            // 台の前で開いたメニューは E でも閉じる（開いたときと同じキー）
+            if (basePanel.Visible && basePanel.Docked && !health.IsDown && GameInput.InteractPressed) basePanel.Visible = false;
             if (GameInput.EscapePressed)
             {
-                if (basePanel.Visible) basePanel.Visible = false;
+                if (basePanel.Visible && !health.IsDown) basePanel.Visible = false;
                 else SetCursorLocked(false);
             }
             else if (!basePanel.Visible && Cursor.lockState != CursorLockMode.Locked && GameInput.AnyMouseButtonPressed)
@@ -79,20 +427,65 @@ namespace SpinTheScrap.World
                 return; // ロックし直したクリックで物を拾わない
             }
 
+            // 台の前で開いたメニューは右に寄せて、カメラで台を映す。閉じたら（Tab で開き直したときも）戻す
+            if (!basePanel.Visible || health.IsDown) currentCabinet = null;
+            if (currentCabinet != null) viewFocus.Focus(currentCabinet.transform, new Vector3(-0.85f, 1.42f, 2.2f), new Vector3(-0.85f, 1.3f, 0f));
+            else viewFocus.Release();
+            basePanel.Docked = currentCabinet != null;
+            basePanel.CabinetKind = currentCabinet != null ? currentCabinet.Kind : (MachineKind?)null;
+            session.CurrentCabinetIndex = currentCabinet != null ? currentCabinet.Index : -1;
+            // 台を映している間は懐中電灯を消す（リールの窓が白く飛ぶ）。閉じたら元に戻す
+            if (basePanel.Docked && flashlight.IsOn)
+            {
+                flashlight.SetOn(false);
+                flashlightWasOn = true;
+            }
+            else if (!basePanel.Docked && flashlightWasOn)
+            {
+                flashlight.SetOn(true);
+                flashlightWasOn = false;
+            }
+
             // メニューを開いたらカーソルを出し、閉じたら（Tab・Esc・「次の潜行へ」のどれでも）戻す
             if (basePanel.Visible != panelWasVisible) SetCursorLocked(!basePanel.Visible);
             panelWasVisible = basePanel.Visible;
+            // ソロでは拠点メニューを開いている間は時間を止める（敵も止まる）。フェーズ 1 の協力プレイでは止めない
+            // ひとりのときだけ時間と世界の音を止める（協力プレイでは止めない）
+            bool pause = basePanel.Visible && mode == NetMode.Solo;
+            Time.timeScale = pause ? 0f : 1f;
+            AudioListener.pause = pause;
 
             bool playing = !basePanel.Visible && Cursor.lockState == CursorLockMode.Locked;
             player.InputEnabled = playing;
             if (!playing) return;
 
-            if (GameInput.FlashlightPressed) flashlight.Toggle();
-            if (GameInput.ExtractPressed)
+            UpdateTools();
+            ApplyStats();
+            UpdateCrawlers();
+        }
+
+        /// <summary>懐中電灯の電池、包帯（H）、爆竹（Q）。数と使えるかどうかは RunState（Core）が決める。</summary>
+        void UpdateTools()
+        {
+            var run = session.Run;
+            if (GameInput.FlashlightPressed)
             {
-                bool playerInZone = zone.Contains(player.transform.position);
-                int count = session.Extract(zone, interactor.Inventory, playerInZone, localOwnerId);
-                if (count > 0) basePanel.Visible = true;
+                // 電池が切れていて予備もなければ点かない
+                if (flashlight.IsOn) flashlight.SetOn(false);
+                else if (run.FlashlightCharge > 0 || run.HasTool(ToolIds.Battery)) flashlight.SetOn(true);
+            }
+            if (flashlight.IsOn && !session.DrainFlashlight(Time.deltaTime)) flashlight.SetOn(false);
+
+            if (GameInput.BandagePressed && health.State.Current < health.State.Max && session.TryUseTool(ToolIds.Bandage))
+            {
+                health.Heal(session.Hazards.BandageHeal);
+                Audio.Sfx.Play2D(Audio.SfxClips.Knock, 0.4f, 0.7f);
+            }
+
+            if (GameInput.FirecrackerPressed && session.TryUseTool(ToolIds.Firecracker))
+            {
+                var cam = player.ViewCamera.transform;
+                Firecracker.Throw(facility.Root, cam.position + cam.forward * 0.5f, cam.forward, session.Enemies);
             }
         }
 
@@ -102,149 +495,250 @@ namespace SpinTheScrap.World
             Cursor.visible = !locked;
         }
 
-        // ---- 潜行ごとのリセット ----
+        // ---- 階層ごとのリセット ----
 
-        void OnDiveStarted(int enemyBonus)
+        void OnFloorStarted(int enemyBonus)
         {
+            basePanel.OnDownedScreen = false;
+            awaitingRescue = false;
+            DespawnNetworkEnemies();
+            DespawnNetworkScrap();
             if (scrapRoot != null) Destroy(scrapRoot.gameObject);
+            if (facility != null) Destroy(facility.Root.gameObject);
+
+            var run = session.Run;
+            // ボス階層は決まった間取り、通常の階は自動生成
+            var layout = run.IsBossFloor
+                ? FacilityLayout.CreateBossFloor()
+                : FacilityLayout.Generate(FacilityLayout.SeedFor(session.RunSeed, run.Floor, session.Attempt), run.Config.RoomCountFor(run.Floor));
+            facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
+            SpawnHazards(session.RunSeed, run.Floor, session.Attempt);
+            SpawnEnemies(enemyBonus);
+            crawlers.Clear();
+            floorStartTime = Time.time;
+            nextCrawlerTime = Time.time + 3f;
+            if (!session.Run.IsBossFloor)
+                for (int i = 0; i < session.Enemies.CrawlerPopulationFor(session.Run.Floor); i++) SpawnCrawler(awayFromPlayer: true);
+            // 台車は道具スロットで当てていれば入口に 1 台
+            if (session.Run.HasTool(ToolIds.Cart)) SpawnCart(new Vector3(4f, 0.05f, -5f));
+            PlaceMachines(run.Floor, FloorRng(session.RunSeed, run.Floor, session.Attempt, 2));
+            health.ResetHealth();
 
-            player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
-            player.transform.SetPositionAndRotation(playerSpawn, Quaternion.identity);
-            player.Controller.enabled = true;
-            // 敵はフェーズ 0 の対象外。enemyBonus は HUD の表示のみ（BasePanel）
+            player.Teleport(playerSpawn, Quaternion.identity);
+            PublishFloor();
         }
 
+        /// <summary>部屋ごとに、深さに応じた数と珍しさでガラクタを置く。特大は入口以外のどこか 1 部屋に必ず 1 個。</summary>
         void SpawnScrap()
         {
             var content = session.Content;
-            var bySize = content.Symbols.ToLookup(s => s.Size == ScrapSize.Huge);
-            var floor = new List<Vector3>(floorSpots);
-            var raised = new List<Vector3>(raisedSpots);
-            spawnRng.Shuffle(floor);
-            spawnRng.Shuffle(raised);
+            var huge = content.Symbols.Where(s => s.Size == ScrapSize.Huge).ToList();
+            var others = content.Symbols.Where(s => s.Size != ScrapSize.Huge).ToList();
 
-            // 特大は必ず 1 個（協力運搬の検証用）。置けるのは床だけ
-            var huge = bySize[true].ToList();
-            if (huge.Count > 0 && floor.Count > 0)
+            var hugeRooms = facility.Rooms.Where(r => r.HugeSpot.HasValue).ToList();
+            if (huge.Count > 0 && hugeRooms.Count > 0)
             {
-                Place(huge[spawnRng.Next(huge.Count)], floor[0]);
-                floor.RemoveAt(0);
+                var room = hugeRooms[spawnRng.Next(hugeRooms.Count)];
+                Place(huge[spawnRng.Next(huge.Count)], room.HugeSpot.Value);
             }
 
-            var others = bySize[false].ToList();
             if (others.Count == 0) return;
-            var spots = raised.Concat(floor).ToList();
-            int count = Mathf.Min(scrapPerDive - 1, spots.Count);
-            for (int i = 0; i < count; i++) Place(PickWeighted(others), spots[i]);
+            foreach (var room in facility.Rooms)
+            {
+                var spots = new List<ScrapSpot>(room.Spots);
+                spawnRng.Shuffle(spots);
+                int count = Mathf.Min(LootTable.ScrapCountFor(room.Plan.Kind, room.Plan.Depth), spots.Count);
+                for (int i = 0; i < count; i++) Place(PickWeighted(others, spots[i].Depth), spots[i].Position);
+            }
         }
 
+        /// <summary>入口以外の部屋に、深さに応じた確率で電気が流れる水たまりを置く。</summary>
+        void SpawnHazards(ulong runSeed, int floor, int attempt)
+        {
+            var rng = FloorRng(runSeed, floor, attempt, 1);
+            var rules = session.Hazards;
+            var content = session.Content;
+            foreach (var room in facility.Rooms)
+            {
+                if (!room.PuddleSpot.HasValue) continue;
+                if (rng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
+                var puddle = FacilityBuilder.CreatePuddle(room.Root, room.PuddleSpot.Value, out var surface, out var glow);
+                puddle.Init(rules, id => content.GetSymbol(id).Tags, () => session.Run.HasTool(ToolIds.InsulatedBoots), health, surface, glow);
+            }
+        }
+
+        /// <summary>
+        /// 敵を奥の部屋から順に 1 部屋 1 体ずつ置く。入口には置かない。
+        /// 数はサイクルと、マネキンの首などで増えた分（enemyBonus）で決まる。
+        /// </summary>
+        void SpawnEnemies(int enemyBonus)
+        {
+            var rules = session.Enemies;
+            var run = session.Run;
+            var rooms = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance)
+                .OrderByDescending(r => r.Plan.Depth).ThenBy(_ => spawnRng.Next(1000)).ToList();
+            if (rooms.Count == 0) return;
+
+            // ボス階層：奥の部屋に目の見えない巨体だけ（ほかの敵は出さない）
+            if (run.IsBossFloor)
+            {
+                var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
+                SpawnEnemy(run.Config.BossFor(run.Floor), FacilityBuilder.RoomCenter(lair.Plan));
+                return;
+            }
+
+            int count = rules.CountFor(run.Floor, enemyBonus, facility.Rooms.Count);
+            foreach (var room in rooms.Take(count))
+            {
+                var position = FacilityBuilder.RoomCenter(room.Plan) + new Vector3(3f, 0f, 3f);
+                SpawnEnemy(EnemyKind.Lurker, position);
+            }
+        }
+
+        /// <summary>ガラクタを置く。協力プレイのホストではネットワークで配る（NetScrap のプレハブを本体にして Spawn）。</summary>
         void Place(SymbolDefinition def, Vector3 spot)
         {
             var rot = Quaternion.Euler(0f, spawnRng.Next(360), 0f);
-            ScrapFactory.Create(def, spot + Vector3.up * 0.4f, rot, scrapRoot);
+            var position = spot + Vector3.up * 0.4f;
+            if (mode == NetMode.Host && netScrapPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netScrapPrefab);
+                instance.BindHost(ScrapFactory.CreateOn(instance.gameObject, def, position, rot));
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return;
+            }
+            ScrapFactory.Create(def, position, rot, scrapRoot);
         }
 
-        SymbolDefinition PickWeighted(List<SymbolDefinition> candidates)
+        SymbolDefinition PickWeighted(List<SymbolDefinition> candidates, int depth)
         {
-            double total = candidates.Sum(Weight);
+            double total = candidates.Sum(c => LootTable.Weight(c.Rarity, depth));
             double roll = spawnRng.NextDouble() * total;
             foreach (var c in candidates)
             {
-                roll -= Weight(c);
+                roll -= LootTable.Weight(c.Rarity, depth);
                 if (roll < 0) return c;
             }
             return candidates[candidates.Count - 1];
         }
 
-        static double Weight(SymbolDefinition def)
-        {
-            switch (def.Rarity)
-            {
-                case Rarity.Common: return 6;
-                case Rarity.Uncommon: return 3;
-                default: return 1;
-            }
-        }
-
-        // ---- 部屋の組み立て ----
+        // ---- 照明・プレイヤー ----
 
         static void DisableOtherCameras()
         {
-            foreach (var cam in FindObjectsByType<Camera>(FindObjectsSortMode.None)) cam.gameObject.SetActive(false);
+            foreach (var cam in FindObjectsByType<Camera>()) cam.gameObject.SetActive(false);
         }
 
         static void BuildLighting()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.22f, 0.24f, 0.22f);
+            RenderSettings.ambientLight = new Color(0.34f, 0.36f, 0.34f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.04f, 0.05f, 0.04f);
-            RenderSettings.fogStartDistance = 6f;
-            RenderSettings.fogEndDistance = 26f;
+            RenderSettings.fogStartDistance = 8f;
+            RenderSettings.fogEndDistance = 32f;
 
-            foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None)) light.gameObject.SetActive(false);
+            foreach (var light in FindObjectsByType<Light>()) light.gameObject.SetActive(false);
+            BuildPostProcessing();
         }
 
-        void BuildRoom()
+        /// <summary>画面全体の仕上げ：光る物のにじみ（ブルーム）、周辺を暗く、色の調子。</summary>
+        static void BuildPostProcessing()
         {
-            var root = new GameObject("Room").transform;
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            var bloom = profile.Add<Bloom>(true);
+            bloom.threshold.Override(0.95f);
+            bloom.intensity.Override(1.2f);
+            bloom.scatter.Override(0.7f);
+            var tonemapping = profile.Add<Tonemapping>(true);
+            tonemapping.mode.Override(TonemappingMode.Neutral);
+            var color = profile.Add<ColorAdjustments>(true);
+            color.postExposure.Override(0.25f);
+            color.contrast.Override(10f);
+            color.saturation.Override(-6f);
+            var vignette = profile.Add<Vignette>(true);
+            vignette.intensity.Override(0.28f);
+            vignette.smoothness.Override(0.45f);
+            var grain = profile.Add<FilmGrain>(true);
+            grain.intensity.Override(0.12f);
 
-            Block(root, "Floor", new Vector3(0f, -0.1f, 0f), new Vector3(24f, 0.2f, 24f), FloorColor);
-            Block(root, "Ceiling", new Vector3(0f, 4.1f, 0f), new Vector3(24f, 0.2f, 24f), WallColor);
-            Block(root, "Wall N", new Vector3(0f, 2f, 12f), new Vector3(24f, 4f, 0.3f), WallColor);
-            Block(root, "Wall S", new Vector3(0f, 2f, -12f), new Vector3(24f, 4f, 0.3f), WallColor);
-            Block(root, "Wall E", new Vector3(12f, 2f, 0f), new Vector3(0.3f, 4f, 24f), WallColor);
-            Block(root, "Wall W", new Vector3(-12f, 2f, 0f), new Vector3(0.3f, 4f, 24f), WallColor);
+            var volume = new GameObject("Post processing").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 1f;
+            volume.sharedProfile = profile;
+        }
 
-            // 中 2 階（x 3〜11, z 2〜10, 高さ 2m）。階段と坂で上がれる。重い物を持って階段を上る検証用
-            Block(root, "Mezzanine", new Vector3(7f, 1f, 6f), new Vector3(8f, 2f, 8f), PropColor);
-            for (int k = 0; k < 8; k++)
+        // ---- スロット台とエレベーター ----
+
+        /// <summary>
+        /// 入口の部屋に武器・強化・道具のスロット台とエレベーター。ボス階層では改造スロットも。
+        /// 通常の階では、いちばん奥の部屋にもう 1 台（強化か道具）。
+        /// </summary>
+        void PlaceMachines(int floor, Rng rng)
+        {
+            MachineCabinet.Placed.Clear();
+            var root = facility.Root;
+            bool bossFloor = session.Run.Config.IsBossFloor(floor);
+            var kinds = new List<MachineKind> { MachineKind.Weapon, MachineKind.Perk, MachineKind.Tool };
+            if (bossFloor) kinds.Add(MachineKind.Mod);
+            for (int i = 0; i < kinds.Count; i++)
+                MachineCabinet.Create(root, new Vector3(-4.5f + i * 3f, 0f, -11.3f), Vector3.forward, kinds[i], cabinetContext, UseMachine);
+
+            Elevator.Create(root, new Vector3(9.2f, 0f, -9.2f), Vector3.left, () => session.Run.Objective.IsComplete && !session.Run.IsOver,
+                strings => session.Run.IsLastFloor ? strings.Get("hud.elevator_exit") : strings.Format("hud.elevator_ready", session.Run.Floor + 1),
+                RideElevator);
+
+            if (bossFloor)
             {
-                float h = (k + 1) * 0.25f;
-                Block(root, "Step " + k, new Vector3(5f, h * 0.5f, -1.75f + k * 0.5f), new Vector3(2f, h, 0.5f), PropColor);
+                // ボスの部屋の奥に「最後の台」：ボスに追われながら回しに行くかどうかの賭け
+                var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
+                var back = FacilityBuilder.RoomCenter(lair.Plan) + new Vector3(0f, 0f, 11.3f);
+                MachineCabinet.Create(root, back + Vector3.left * 2f, Vector3.back, MachineKind.Mod, cabinetContext, UseMachine);
+                MachineCabinet.Create(root, back + Vector3.right * 2f, Vector3.back, MachineKind.Perk, cabinetContext, UseMachine);
+                return;
             }
-            float rampAngle = Mathf.Atan2(2f, 4f) * Mathf.Rad2Deg;
-            var ramp = Block(root, "Ramp", new Vector3(9.5f, 0.95f, 0f), new Vector3(2.5f, 0.2f, Mathf.Sqrt(20f)), PropColor);
-            ramp.rotation = Quaternion.Euler(-rampAngle, 0f, 0f);
-
-            // 投げて越える低い壁と、物を置くカウンター
-            Block(root, "Low wall", new Vector3(-1f, 0.6f, 1f), new Vector3(6f, 1.2f, 0.3f), WallColor);
-            Block(root, "Counter A", new Vector3(-7f, 0.5f, 5f), new Vector3(4f, 1f, 1f), PropColor);
-            Block(root, "Counter B", new Vector3(-9f, 0.5f, -2f), new Vector3(1f, 1f, 4f), PropColor);
-            Block(root, "Pillar 1", new Vector3(-3f, 2f, 7f), new Vector3(0.6f, 4f, 0.6f), WallColor);
-            Block(root, "Pillar 2", new Vector3(2f, 2f, -4f), new Vector3(0.6f, 4f, 0.6f), WallColor);
-
-            // 非常灯（緑）と、拠点側の明るい灯り
-            PointLight(root, new Vector3(-6f, 3.6f, 6f), new Color(0.5f, 1f, 0.6f), 9f, 1.2f);
-            PointLight(root, new Vector3(7f, 3.8f, 6f), new Color(0.5f, 1f, 0.6f), 8f, 1f);
-            PointLight(root, new Vector3(0f, 3.6f, -9.5f), new Color(1f, 0.9f, 0.7f), 8f, 1.6f);
-
-            floorSpots.AddRange(new[]
-            {
-                new Vector3(-4f, 0f, 4f), new Vector3(-1f, 0f, 6f), new Vector3(2f, 0f, 9f), new Vector3(-9f, 0f, 9f),
-                new Vector3(-6f, 0f, -6f), new Vector3(-3f, 0f, -2f), new Vector3(1f, 0f, 3.5f), new Vector3(9f, 0f, -6f),
-                new Vector3(5f, 0f, -7f), new Vector3(-9f, 0f, 2f), new Vector3(10f, 0f, -9f), new Vector3(-5f, 0f, 10f),
-            });
-            raisedSpots.AddRange(new[]
-            {
-                new Vector3(-8f, 1f, 5f), new Vector3(-6.5f, 1f, 5f), new Vector3(-9f, 1f, -1f), new Vector3(-9f, 1f, -3f),
-                new Vector3(5f, 2f, 5f), new Vector3(7f, 2f, 8f), new Vector3(9.5f, 2f, 4f), new Vector3(8f, 2f, 9f),
-            });
+            var deepest = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance).OrderByDescending(r => r.Plan.Depth).FirstOrDefault();
+            if (deepest == null) return;
+            var extra = rng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;
+            MachineCabinet.Create(root, FacilityBuilder.RoomCenter(deepest.Plan) + new Vector3(8f, 0f, -10.3f), Vector3.forward, extra, cabinetContext, UseMachine);
         }
 
-        void BuildExtractionZone()
+        /// <summary>スロット台を使う：持っている物と台の前に置いた物をすべて入れて、その台のメニューを開く。</summary>
+        void UseMachine(MachineCabinet cabinet, Interactor who)
         {
-            var pad = Block(null, "Extraction pad", new Vector3(0f, 0.01f, -10f), new Vector3(6f, 0.02f, 3f), new Color(0.2f, 0.6f, 0.3f));
-            Destroy(pad.GetComponent<Collider>());
+            var scraps = cabinet.Hopper.ScrapsInside();
+            scraps.AddRange(who.Inventory.TakeAll());
+            var held = who.TakeHeld();
+            if (held != null && !scraps.Contains(held)) scraps.Add(held);
+            int fed = session.Feed(scraps, session.LocalPlayerId);
+            if (fed > 0) Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
+            currentCabinet = cabinet;
+            basePanel.Machine = cabinet.Kind;
+            basePanel.Visible = true;
+        }
 
-            var go = new GameObject("Extraction zone");
-            go.transform.position = new Vector3(0f, 1.5f, -10f);
-            var box = go.AddComponent<BoxCollider>();
-            box.size = new Vector3(6f, 3f, 3f);
-            zone = go.AddComponent<ExtractionZone>();
+        /// <summary>回すと台から大きな音がして、敵が寄ってくる（大当たりはもっと大きい）。メニューを閉じると敵が動き出す。</summary>
+        void OnSpun(MachineOutcome outcome)
+        {
+            var position = currentCabinet != null ? currentCabinet.transform.position : player.transform.position;
+            var rules = session.Run.MachineRules;
+            // 台の前なら台のリールを回して見せる（当たりの音は止まったときに台が鳴らす）
+            if (currentCabinet != null) currentCabinet.View.Play(outcome);
+            // ホストが自分で回したら、ほかの人の画面でもこの台を回す（クライアントの分は NetPlayer が知らせる）
+            if (mode == NetMode.Host && currentCabinet != null && NetSession.Instance != null && session.LastSpinBefore != null)
+                NetSession.Instance.ShowSpin(currentCabinet.Index, session.LastSpinBefore, (int)outcome.Kind, session.LocalPlayerId);
+            else if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Audio.Sfx.Play2D(Audio.SfxClips.Win, 0.6f);
+            NoiseEvents.Emit(position, (float)(outcome.Reading.Jackpot ? rules.JackpotNoiseRadius : rules.SpinNoiseRadius));
+        }
+
+        void RideElevator()
+        {
+            if (!session.TryAdvanceFloor()) return;
+            Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.7f, 0.8f);
+            if (session.Run.IsOver) basePanel.Visible = true;
         }
 
         void BuildPlayer()
@@ -266,36 +760,21 @@ namespace SpinTheScrap.World
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = RenderSettings.fogColor;
             camGo.AddComponent<AudioListener>();
+            var cameraData = cam.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             flashlight = camGo.AddComponent<Flashlight>();
 
             player = go.AddComponent<FirstPersonController>();
             player.SetCamera(cam);
+            player.Frozen = true; // 階層ができるまで（始める前の画面の間）止めておく
             go.AddComponent<Inventory>();
             interactor = go.AddComponent<Interactor>();
-        }
-
-        static Transform Block(Transform parent, string name, Vector3 position, Vector3 size, Color color)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            go.transform.SetParent(parent, false);
-            go.transform.position = position;
-            go.transform.localScale = size;
-            go.GetComponent<Renderer>().sharedMaterial = MaterialUtil.Create(color);
-            return go.transform;
-        }
-
-        static void PointLight(Transform parent, Vector3 position, Color color, float range, float intensity)
-        {
-            var go = new GameObject("Light");
-            go.transform.SetParent(parent, false);
-            go.transform.position = position;
-            var light = go.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = color;
-            light.range = range;
-            light.intensity = intensity;
-            light.shadows = LightShadows.Soft;
+            health = go.AddComponent<PlayerHealth>();
+            go.AddComponent<PlayerNoise>();
+            combat = go.AddComponent<PlayerCombat>();
+            go.AddComponent<WeaponViewModel>();
+            viewFocus = go.AddComponent<ViewFocus>();
         }
     }
 }

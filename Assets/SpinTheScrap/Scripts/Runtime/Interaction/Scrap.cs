@@ -1,9 +1,16 @@
 using System;
+using SpinTheScrap.Audio;
 using SpinTheScrap.Core;
 using UnityEngine;
 
 namespace SpinTheScrap.Interaction
 {
+    /// <summary>投げたガラクタが当たったときに反応する物（敵など）。</summary>
+    public interface IScrapHittable
+    {
+        void OnHitByScrap(Scrap scrap, float impactSpeed);
+    }
+
     /// <summary>
     /// 廃墟に落ちているガラクタ 1 個。持ち帰るとシンボル（SymbolId）としてリールに入れられる。
     /// 割れ物は落下や衝突で状態（Integrity）が下がり、強い衝撃で割れる（要件書 4.1）。
@@ -25,6 +32,7 @@ namespace SpinTheScrap.Interaction
         Rigidbody body;
         Renderer[] renderers;
         Color[] originalColors;
+        float nextImpactSoundTime;
 
         public string SymbolId => symbolId;
         public ScrapSize Size => size;
@@ -36,6 +44,49 @@ namespace SpinTheScrap.Interaction
         public bool IsHeld { get; set; }
 
         public event Action<Scrap> Broken;
+        /// <summary>誰かが手に取った（持った・しまった・取り出した）。協力プレイでは NetScrap が持ち主を切り替える。</summary>
+        public event Action<Scrap> Claimed;
+        /// <summary>しまった（true）・取り出した（false）。協力プレイでは NetScrap がほかの人の画面でも隠す。</summary>
+        public event Action<Scrap, bool> StowedChanged;
+
+        /// <summary>協力プレイ：このマシンで物理を計算しているか（NetScrap が設定。なければ常に true）。</summary>
+        public Func<bool> LocalPhysics { get; set; }
+        public bool HasLocalPhysics => LocalPhysics == null || LocalPhysics();
+        /// <summary>
+        /// 協力プレイ：物理を計算しているマシンへ「つかんだ点（この物から見た位置）をどこへ引っ張りたいか」を送る。
+        /// 特大を 2 人で持つと、ホストで 2 人分の力が足される。
+        /// </summary>
+        public Action<Vector3, Vector3> RemoteCarry { get; set; }
+
+        /// <summary>インベントリにしまってある（見えず、当たり判定もない）。</summary>
+        public bool IsStowed { get; private set; }
+
+        public void NotifyClaimed() => Claimed?.Invoke(this);
+
+        /// <summary>
+        /// しまう・取り出す。オブジェクトは無効にせず、見た目・当たり判定・物理だけを止める
+        /// （協力プレイで、しまっている間もネットワーク上の物として残すため）。
+        /// </summary>
+        public void SetStowed(bool stowed)
+        {
+            if (IsStowed == stowed) return;
+            IsStowed = stowed;
+            SetPresent(!stowed);
+            Body.isKinematic = stowed;
+            if (!stowed)
+            {
+                Body.linearVelocity = Vector3.zero;
+                Body.angularVelocity = Vector3.zero;
+            }
+            StowedChanged?.Invoke(this, stowed);
+        }
+
+        /// <summary>見た目と当たり判定を出す・消す（ほかの人がしまったときにも使う）。</summary>
+        public void SetPresent(bool present)
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = present;
+            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = present;
+        }
 
         public static float MassFor(ScrapSize size)
         {
@@ -68,6 +119,7 @@ namespace SpinTheScrap.Interaction
         void Awake()
         {
             renderers = GetComponentsInChildren<Renderer>();
+            nextImpactSoundTime = Time.time + 1f; // 潜行の開始時に置いた物が着地する音は鳴らさない
             ApplyPhysicsDefaults();
         }
 
@@ -83,13 +135,43 @@ namespace SpinTheScrap.Interaction
 
         void OnCollisionEnter(Collision collision)
         {
-            if (!fragile || IsBroken) return;
             float speed = collision.relativeVelocity.magnitude;
+            // 手に持って運んでいる間の小さな接触は音にしない
+            if (!IsHeld)
+            {
+                World.NoiseEvents.Impact(transform.position, speed);
+                PlayImpactSound(speed);
+            }
+            var hittable = collision.collider.GetComponentInParent<IScrapHittable>();
+            if (hittable != null) hittable.OnHitByScrap(this, speed);
+
+            if (!fragile || IsBroken) return;
             if (speed < crackSpeed) return;
 
             integrity = Mathf.Clamp01(integrity - (speed - crackSpeed) / (breakSpeed - crackSpeed));
             Tint(Color.Lerp(new Color(0.15f, 0.15f, 0.15f), Color.white, integrity));
-            if (IsBroken) Broken?.Invoke(this);
+            if (IsBroken)
+            {
+                World.NoiseEvents.Break(transform.position);
+                Sfx.PlayAt(SfxClips.Shatter, transform.position, 0.9f, UnityEngine.Random.Range(0.9f, 1.1f));
+                Broken?.Invoke(this);
+            }
+        }
+
+        /// <summary>ぶつかった音。小さい物は金属音、大は鈍い音、特大は重い音。速いほど大きい。</summary>
+        void PlayImpactSound(float speed)
+        {
+            const float minSpeed = 1.2f;
+            if (speed < minSpeed || Time.time < nextImpactSoundTime) return;
+            nextImpactSoundTime = Time.time + 0.08f; // 転がっているときに鳴りっぱなしにならないように
+            float volume = Mathf.Clamp01((speed - minSpeed) / 8f) * 0.9f + 0.1f;
+            float pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+            switch (size)
+            {
+                case ScrapSize.Small: Sfx.PlayAt(Sfx.Pick(SfxClips.Clinks), transform.position, volume * 0.7f, pitch); break;
+                case ScrapSize.Large: Sfx.PlayAt(SfxClips.Knock, transform.position, volume, pitch); break;
+                default: Sfx.PlayAt(SfxClips.HeavyThud, transform.position, volume, pitch); break;
+            }
         }
 
         void Tint(Color multiplier)

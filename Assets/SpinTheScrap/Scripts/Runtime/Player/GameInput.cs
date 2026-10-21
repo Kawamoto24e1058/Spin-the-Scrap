@@ -46,11 +46,16 @@ namespace SpinTheScrap.Player
 #if ENABLE_INPUT_SYSTEM
         public static bool JumpPressed => KeyDown(Key.Space);
         public static bool RunHeld => KeyHeld(Key.LeftShift);
-        public static bool InteractPressed => KeyDown(Key.E) || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
+        public static bool InteractPressed => KeyDown(Key.E);
+        public static bool ReviveHeld => KeyHeld(Key.R);
+        public static bool DragPressed => KeyDown(Key.F);
+        public static bool AttackHeld => Mouse.current != null && Mouse.current.leftButton.isPressed;
         public static bool ThrowPressed => Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame;
+        public static bool ThrowHeld => Mouse.current != null && Mouse.current.rightButton.isPressed;
         public static bool DropPressed => KeyDown(Key.G);
-        public static bool ExtractPressed => KeyDown(Key.F);
         public static bool FlashlightPressed => KeyDown(Key.L);
+        public static bool BandagePressed => KeyDown(Key.H);
+        public static bool FirecrackerPressed => KeyDown(Key.Q);
         public static bool BaseMenuPressed => KeyDown(Key.Tab);
         public static bool EscapePressed => KeyDown(Key.Escape);
         public static bool AnyMouseButtonPressed => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
@@ -78,11 +83,16 @@ namespace SpinTheScrap.Player
 #else
         public static bool JumpPressed => Input.GetKeyDown(KeyCode.Space);
         public static bool RunHeld => Input.GetKey(KeyCode.LeftShift);
-        public static bool InteractPressed => Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0);
+        public static bool InteractPressed => Input.GetKeyDown(KeyCode.E);
+        public static bool ReviveHeld => Input.GetKey(KeyCode.R);
+        public static bool DragPressed => Input.GetKeyDown(KeyCode.F);
+        public static bool AttackHeld => Input.GetMouseButton(0);
         public static bool ThrowPressed => Input.GetMouseButtonDown(1);
+        public static bool ThrowHeld => Input.GetMouseButton(1);
         public static bool DropPressed => Input.GetKeyDown(KeyCode.G);
-        public static bool ExtractPressed => Input.GetKeyDown(KeyCode.F);
         public static bool FlashlightPressed => Input.GetKeyDown(KeyCode.L);
+        public static bool BandagePressed => Input.GetKeyDown(KeyCode.H);
+        public static bool FirecrackerPressed => Input.GetKeyDown(KeyCode.Q);
         public static bool BaseMenuPressed => Input.GetKeyDown(KeyCode.Tab);
         public static bool EscapePressed => Input.GetKeyDown(KeyCode.Escape);
         public static bool AnyMouseButtonPressed => Input.GetMouseButtonDown(0);
