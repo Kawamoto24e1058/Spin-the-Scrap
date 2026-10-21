@@ -68,7 +68,8 @@ namespace SpinTheScrap.Player
 
             // 物を持っている・台車を押している・メニューを開いている間は下げる
             bool handsBusy = interactor.Held != null || interactor.Pushed != null || !controller.InputEnabled;
-            lowered = Mathf.MoveTowards(lowered, handsBusy ? 1f : 0f, Time.deltaTime * 4f);
+            // メニューを開くと時間が止まるので、下げる動きは実時間で進める
+            lowered = Mathf.MoveTowards(lowered, handsBusy ? 1f : 0f, Time.unscaledDeltaTime * 4f);
 
             // 歩くと揺れる
             var v = controller.Controller.velocity;
