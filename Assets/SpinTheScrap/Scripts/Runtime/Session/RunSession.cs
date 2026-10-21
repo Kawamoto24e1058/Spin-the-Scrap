@@ -11,14 +11,37 @@ namespace SpinTheScrap.Session
     /// <summary>スロット台に入れたが、まだ「メダルに換える」か「リールに入れる」かを決めていないガラクタ。</summary>
     public sealed class HaulItem
     {
+        /// <summary>協力プレイでクライアントがどれを選んだかをホストに伝える番号。</summary>
+        public int Id;
         public string SymbolId;
         public double ValueFactor;
         public int OwnerId;
     }
 
     /// <summary>
+    /// 協力プレイのクライアントで、ランを変える操作をホストへ送る先（NetPlayer が実装する）。
+    /// ホストが RunState を変え、その状態がクライアントに写される。
+    /// </summary>
+    public interface IRunAuthority
+    {
+        void Feed(List<Scrap> scraps, double brokenRatio);
+        void Spin(MachineKind kind);
+        void ConvertToMedals(int haulId);
+        void AddToReel(int haulId, MachineKind kind);
+        void RemoveFromReel(MachineKind kind, int instanceId);
+        void BuyRelic(string relicId);
+        void AdvanceFloor();
+        void NewRun();
+        void ReportDowned(int lostCount);
+        void UseTool(string toolId);
+        void DrainFlashlight(double seconds);
+        void DiscardSpentWeapon(int weaponSerial);
+    }
+
+    /// <summary>
     /// 1 ランの進行を Unity 側から操作する窓口。ルールそのものは SpinTheScrap.Core.RunState が持つ。
-    /// フェーズ 1 ではこのコンポーネントをホスト上だけで動かし、結果を同期する想定。
+    /// 協力プレイではホストの RunState が正で、クライアントは Remote（ホストへ送る先）を通して操作し、
+    /// ホストから届いた状態（SaveState の文字列）を LoadState で写す。
     /// </summary>
     public sealed class RunSession : MonoBehaviour
     {
@@ -33,6 +56,14 @@ namespace SpinTheScrap.Session
         [SerializeField] Language language = Language.Japanese;
 
         readonly List<HaulItem> haul = new List<HaulItem>();
+        int nextHaulId = 1;
+
+        /// <summary>協力プレイのクライアントでだけ設定する。設定されていると、ランを変える操作はホストへ送る。</summary>
+        public IRunAuthority Remote { get; set; }
+        /// <summary>台に入れたガラクタを片付ける（協力プレイのホストではネットワークから消す）。</summary>
+        public Action<Scrap> DisposeScrap { get; set; } = scrap => Destroy(scrap.gameObject);
+        /// <summary>状態がホストから届いた（クライアント）。</summary>
+        public event Action StateLoaded;
 
         public ContentDatabase Content { get; private set; }
         public StringTable Strings { get; private set; }
@@ -71,12 +102,18 @@ namespace SpinTheScrap.Session
 
         public void NewRun()
         {
+            if (Remote != null)
+            {
+                Remote.NewRun();
+                return;
+            }
             RunStartRealtime = Time.realtimeSinceStartup;
             ulong runSeed = seed != 0 ? (ulong)seed : (ulong)DateTime.UtcNow.Ticks;
             RunSeed = runSeed;
             Attempt = 0;
             Run = new RunState(Content, mvpBalance ? BalanceConfig.CreateMvp() : new BalanceConfig(), runSeed);
             haul.Clear();
+            nextHaulId = 1;
             LastSpin = null;
             LastOutcome = null;
             Message = null;
@@ -90,13 +127,24 @@ namespace SpinTheScrap.Session
         public int Feed(List<Scrap> scraps, int ownerId)
         {
             double brokenRatio = Run.BrokenFragileValueRatio;
+            if (Remote != null)
+            {
+                Remote.Feed(scraps, brokenRatio);
+                return scraps.Count;
+            }
             foreach (var scrap in scraps)
             {
-                haul.Add(new HaulItem { SymbolId = scrap.SymbolId, ValueFactor = scrap.ValueFactor(brokenRatio), OwnerId = ownerId });
-                Destroy(scrap.gameObject);
+                AddToHaul(scrap.SymbolId, scrap.ValueFactor(brokenRatio), ownerId);
+                DisposeScrap(scrap);
             }
             return scraps.Count;
         }
+
+        /// <summary>ホスト：台に入れたガラクタを記録する（クライアントが入れた物も）。</summary>
+        public void AddToHaul(string symbolId, double valueFactor, int ownerId) =>
+            haul.Add(new HaulItem { Id = nextHaulId++, SymbolId = symbolId, ValueFactor = valueFactor, OwnerId = ownerId });
+
+        public HaulItem FindHaul(int id) => haul.Find(h => h.Id == id);
 
         /// <summary>
         /// 倒れた。残機が 1 減る。持っていた物は失い、台に入れた物（Haul）は残る。
@@ -104,6 +152,12 @@ namespace SpinTheScrap.Session
         /// </summary>
         public void ReportDowned(int lostCount)
         {
+            if (Remote != null)
+            {
+                Remote.ReportDowned(lostCount);
+                Message = Strings.Format("base.downed", lostCount, Math.Max(0, Run.Lives - 1));
+                return;
+            }
             Run.OnDowned();
             Message = Run.IsFailed
                 ? Strings.Format("base.downed_over", lostCount)
@@ -112,10 +166,18 @@ namespace SpinTheScrap.Session
 
         public double MedalValueOf(HaulItem item) => Run.MedalValueFor(item.SymbolId, item.ValueFactor, LocalPlayerId);
 
-        public void ConvertToMedals(HaulItem item)
+        public void ConvertToMedals(HaulItem item) => ConvertToMedals(item, LocalPlayerId);
+
+        /// <summary>換金する。レートは換金した人（playerId）のギャンブルの強化で決まる。</summary>
+        public void ConvertToMedals(HaulItem item, int playerId)
         {
+            if (Remote != null)
+            {
+                Remote.ConvertToMedals(item.Id);
+                return;
+            }
             if (!haul.Remove(item)) return;
-            Run.ConvertToMedals(item.SymbolId, item.ValueFactor, LocalPlayerId);
+            Run.ConvertToMedals(item.SymbolId, item.ValueFactor, playerId);
         }
 
         /// <summary>割れて価値のない物はリールに入れられない。</summary>
@@ -123,18 +185,93 @@ namespace SpinTheScrap.Session
 
         public void AddToReel(HaulItem item, MachineKind kind)
         {
-            if (!CanAddToReel(item) || !haul.Remove(item)) return;
+            if (!CanAddToReel(item)) return;
+            if (Remote != null)
+            {
+                Remote.AddToReel(item.Id, kind);
+                return;
+            }
+            if (!haul.Remove(item)) return;
             Run.AddToReel(kind, item.SymbolId, item.OwnerId);
         }
 
-        /// <summary>台を回す。出た物はレバーを引いたプレイヤー（LocalPlayerId）に入る。</summary>
+        public void RemoveFromReel(MachineKind kind, int instanceId)
+        {
+            if (Remote != null) Remote.RemoveFromReel(kind, instanceId);
+            else Run.TryRemoveFromReel(kind, instanceId);
+        }
+
+        /// <summary>レリックを買う。買えたら true（クライアントでは送っただけなので false）。</summary>
+        public bool BuyRelic(string relicId)
+        {
+            if (Remote == null) return Run.TryBuyRelic(relicId);
+            Remote.BuyRelic(relicId);
+            return false;
+        }
+
+        /// <summary>道具を 1 回使う。クライアントではその場で減らし、ホストにも伝える。</summary>
+        public bool TryUseTool(string toolId)
+        {
+            if (!Run.TryUseTool(toolId)) return false;
+            Remote?.UseTool(toolId);
+            return true;
+        }
+
+        /// <summary>懐中電灯の電池を減らす（電池はチームで共有）。</summary>
+        public bool DrainFlashlight(double seconds)
+        {
+            Remote?.DrainFlashlight(seconds);
+            return Run.DrainFlashlight(seconds);
+        }
+
+        /// <summary>手に持っている武器が壊れた（耐久・弾がなくなった）。</summary>
+        public void DiscardSpentWeapon()
+        {
+            var me = Run.Player(LocalPlayerId);
+            if (Remote != null) Remote.DiscardSpentWeapon(me.WeaponSerial); // ホストが捨てるまでは素手として扱う
+            else me.Weapon = null;
+        }
+
+        /// <summary>
+        /// 台を回す。出た物はレバーを引いたプレイヤー（LocalPlayerId）に入る。
+        /// クライアントではホストへ送り、ホストが回す直前の状態が ReplaySpin で届く。
+        /// </summary>
         public bool Spin(MachineKind kind)
         {
+            if (Remote != null)
+            {
+                if (Run.CanSpin(kind, LocalPlayerId)) Remote.Spin(kind);
+                return false;
+            }
             if (!Run.TrySpin(kind, LocalPlayerId, out var outcome)) return false;
+            ShowOutcome(outcome);
+            return true;
+        }
+
+        /// <summary>ホスト：ほかの人（playerId）の代わりに回す。回せたら回す直前の状態（RunState.Save）を返す。</summary>
+        public string SpinFor(MachineKind kind, int playerId)
+        {
+            if (!Run.CanSpin(kind, playerId)) return null;
+            string before = Run.Save();
+            Run.TrySpin(kind, playerId, out _);
+            return before;
+        }
+
+        /// <summary>
+        /// クライアント：ホストが回す直前の状態に戻して同じように回す。乱数の状態も同じなので、同じ結果になる
+        /// （出た物の表示と、回した音・武器の持ち替えのため）。
+        /// </summary>
+        public void ReplaySpin(string before, MachineKind kind)
+        {
+            LoadRun(before);
+            if (Run.TrySpin(kind, LocalPlayerId, out var outcome)) ShowOutcome(outcome);
+        }
+
+        void ShowOutcome(MachineOutcome outcome)
+        {
             LastSpin = outcome.Reading.Result;
             LastOutcome = outcome;
             Spun?.Invoke(outcome);
-            return true;
         }
 
         /// <summary>台を回した（音を鳴らす・武器を持ち替えるなど、世界の側の処理用）。</summary>
@@ -147,6 +284,11 @@ namespace SpinTheScrap.Session
         public bool TryAdvanceFloor()
         {
             if (Run.IsOver || !Run.Objective.IsComplete) return false;
+            if (Remote != null)
+            {
+                Remote.AdvanceFloor(); // 間取りはホストが配った階層で組み立て直す
+                return false;
+            }
             Run.AdvanceFloor();
             if (Run.IsCleared)
             {
@@ -159,16 +301,70 @@ namespace SpinTheScrap.Session
             return true;
         }
 
-        /// <summary>倒れたあと、この階層を最初からやり直す（間取りも作り直す）。</summary>
+        /// <summary>協力プレイ：倒れても階層はやり直さず、その人だけ入口で起き上がる（RespawnRequested）。</summary>
+        public bool CoopRespawn { get; set; }
+        public event Action RespawnRequested;
+
+        /// <summary>倒れたあと、この階層を最初からやり直す（間取りも作り直す）。協力プレイでは入口で起き上がる。</summary>
         public void RestartFloor()
         {
             if (Run.IsOver) return;
+            if (CoopRespawn)
+            {
+                Message = null;
+                RespawnRequested?.Invoke();
+                return;
+            }
             Attempt++;
             Message = null;
             StartFloor();
         }
 
         void StartFloor() => FloorStarted?.Invoke(Run.ConsumeEnemyBonus());
+
+        // ---- 協力プレイ：ホストの状態をクライアントへ写す ----
+
+        /// <summary>ホスト：ランの状態（RunState・台に入れたガラクタ・やり直し回数・メッセージ）を文字列にする。</summary>
+        public string SaveState()
+        {
+            var w = new SnapshotWriter();
+            w.Write(Attempt).Write((Message ?? "").Replace('\n', ' ').Replace('\t', ' ')).Write(nextHaulId).Write(haul.Count);
+            foreach (var h in haul) w.Write(h.Id).Write(h.SymbolId).Write(h.ValueFactor).Write(h.OwnerId);
+            return w.ToString() + "\n" + Run.Save();
+        }
+
+        /// <summary>クライアント：ホストから届いた状態を写す。</summary>
+        public void LoadState(string state)
+        {
+            if (string.IsNullOrEmpty(state)) return;
+            int split = state.IndexOf('\n');
+            var r = new SnapshotReader(state.Substring(0, split));
+            Attempt = r.Int();
+            string message = r.String();
+            if (message.Length > 0) Message = message;
+            nextHaulId = r.Int();
+            haul.Clear();
+            int count = r.Int();
+            for (int i = 0; i < count; i++)
+                haul.Add(new HaulItem { Id = r.Int(), SymbolId = r.String(), ValueFactor = r.Double(), OwnerId = r.Int() });
+            LoadRun(state.Substring(split + 1));
+            StateLoaded?.Invoke();
+        }
+
+        /// <summary>
+        /// RunState を写す。自分の武器の耐久・弾数はこのマシンで減らしているので、同じ武器のままなら少ない方を残す
+        /// （ホストには NetPlayer が少し遅れて伝える）。
+        /// </summary>
+        void LoadRun(string snapshot)
+        {
+            var mine = Run.Player(LocalPlayerId);
+            int serial = mine.WeaponSerial;
+            int remaining = mine.Weapon != null ? mine.Weapon.Remaining : 0;
+            Run.Load(snapshot);
+            mine = Run.Player(LocalPlayerId);
+            if (mine.Weapon != null && mine.WeaponSerial == serial && remaining < mine.Weapon.Remaining)
+                mine.Weapon.SetRemaining(remaining);
+        }
 
         public string Medals(double value) => NumberFormatter.Format(value, Strings.Language);
         public string SymbolName(string symbolId) => Strings.Get(Content.GetSymbol(symbolId).NameKey);

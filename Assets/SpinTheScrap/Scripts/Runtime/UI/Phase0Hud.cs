@@ -51,9 +51,7 @@ namespace SpinTheScrap.UI
             DrawRevealedEnemies();
 
             // 左上：ランの状況
-            string status = Net.NetSession.IsRemoteView
-                ? s.Format("base.status", Net.NetSession.Instance.Floor, run.Config.FloorCount, Net.NetSession.Instance.Lives, session.Medals(Net.NetSession.Instance.Medals))
-                : s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
+            string status = s.Format("base.status", run.Floor, run.Config.FloorCount, run.Lives, session.Medals(run.Medals));
             ShadowLabel(new Rect(16, 12, 900, 24), status + "    " + ObjectiveText.Describe(session), label);
             ShadowLabel(new Rect(16, 36, 400, 24), s.Format("hud.load", player.LoadKg.ToString("0")), label);
             ShadowLabel(new Rect(16, 60, 400, 24), s.Format("hud.haul", session.Haul.Count), label);
@@ -178,7 +176,7 @@ namespace SpinTheScrap.UI
             if (combat == null) return;
             var s = session.Strings;
             var weapon = session.Run.Player(session.LocalPlayerId).Weapon;
-            string text = weapon == null ? s.Get("hud.fists")
+            string text = weapon == null || weapon.IsSpent ? s.Get("hud.fists")
                 : s.Format("hud.weapon", s.Get(weapon.Definition.NameKey), weapon.Remaining, weapon.Capacity);
             var rect = new Rect(Screen.width - 316, Screen.height - 96, 300, 24);
             var style = new GUIStyle(label) { alignment = TextAnchor.MiddleRight };

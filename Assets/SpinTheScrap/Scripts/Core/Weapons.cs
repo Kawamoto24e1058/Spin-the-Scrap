@@ -163,6 +163,9 @@ namespace SpinTheScrap.Core
             return true;
         }
 
+        /// <summary>残りの耐久・弾数を設定する（協力プレイで、武器の状態をホストとやりとりするとき）。</summary>
+        public void SetRemaining(int remaining) => Remaining = Math.Max(0, Math.Min(remaining, Capacity));
+
         /// <summary>1 回攻撃する（耐久・弾を 1 減らす）。残りがなければ false。</summary>
         public bool TryUse()
         {

@@ -20,12 +20,11 @@ namespace SpinTheScrap.World
     public sealed class Phase0Bootstrap : MonoBehaviour
     {
         [SerializeField] Vector3 playerSpawn = new Vector3(0f, 1.1f, -8f);
-        [Tooltip("フェーズ 1 で 2 人目が入るまでは 0 固定")]
-        [SerializeField] int localOwnerId;
         [Tooltip("協力プレイ用（Create Phase 0 Scene が設定する）")]
         [SerializeField] FishNet.Managing.NetworkManager networkManager;
         [SerializeField] Net.NetSession netSessionPrefab;
         [SerializeField] Net.NetEnemy netEnemyPrefab;
+        [SerializeField] Net.NetScrap netScrapPrefab;
 
         RunSession session;
         FirstPersonController player;
@@ -38,6 +37,7 @@ namespace SpinTheScrap.World
         BuiltFacility facility;
         Rng spawnRng;
         bool panelWasVisible;
+        bool wasOver;
         PlayerCombat combat;
         float floorStartTime;
         float nextCrawlerTime;
@@ -52,6 +52,10 @@ namespace SpinTheScrap.World
             session = GetComponent<RunSession>();
             if (session == null) session = gameObject.AddComponent<RunSession>();
             session.FloorStarted += OnFloorStarted;
+            session.RespawnRequested += Respawn;
+            session.DisposeScrap = DisposeScrap;
+            NetSession.LocalSession = session;
+            NetScrap.Lookup = id => session.Content.GetSymbol(id);
             spawnRng = new Rng((ulong)System.Environment.TickCount);
             health.Init(session.Hazards);
             health.Downed += OnPlayerDowned;
@@ -104,6 +108,8 @@ namespace SpinTheScrap.World
                 Debug.LogWarning("[Spin the Scrap] NetworkManager がありません。Create Phase 0 Scene でシーンを作り直してください。ひとりで始めます。");
                 mode = NetMode.Solo;
             }
+            session.CoopRespawn = mode != NetMode.Solo;
+            if (mode == NetMode.Client) session.Remote = new RemoteRun(); // ランを変える操作はホストへ送る
             switch (mode)
             {
                 case NetMode.Host:
@@ -134,8 +140,8 @@ namespace SpinTheScrap.World
         }
 
         /// <summary>
-        /// クライアント：ホストが配った階層を組み立てる。敵・ガラクタ・スロット台の結果はホストだけが持つ
-        /// （同期は次の段階。今は間取りとほかの人の分身だけが見える）。
+        /// クライアント：ホストが配った階層を組み立てる（間取り・スロット台・水たまり）。
+        /// 敵とガラクタはホストがネットワークで配り、ランの状態は NetSession から写す。
         /// </summary>
         void UpdateClientFloor()
         {
@@ -152,10 +158,42 @@ namespace SpinTheScrap.World
                 : FacilityLayout.Generate(FacilityLayout.SeedFor(net.RunSeed, net.Floor, net.Attempt), config.RoomCountFor(net.Floor));
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
+            interactor.Inventory.TakeAll(); // 前の階層の物はホストが消している
+            SpawnHazards(net.RunSeed, net.Floor, net.Attempt);
+            PlaceMachines(net.Floor, FloorRng(net.RunSeed, net.Floor, net.Attempt, 2));
+            basePanel.OnDownedScreen = false;
+            Respawn();
+        }
+
+        /// <summary>階層ごとに全員で同じになる乱数（水たまり・奥の台の種類。ホストもクライアントも同じ値になる）。</summary>
+        static Rng FloorRng(ulong runSeed, int floor, int attempt, ulong salt) =>
+            new Rng(FacilityLayout.SeedFor(runSeed, floor, attempt) ^ (0x9E3779B97F4A7C15UL * salt));
+
+        /// <summary>協力プレイで倒れたあと：入口で起き上がる（階層はそのまま）。</summary>
+        void Respawn()
+        {
+            basePanel.OnDownedScreen = false;
             health.ResetHealth();
             player.Controller.enabled = false;
-            player.transform.SetPositionAndRotation(playerSpawn + Vector3.right * 1.5f, Quaternion.identity);
+            var offset = mode == NetMode.Client ? Vector3.right * 1.5f : Vector3.zero;
+            player.transform.SetPositionAndRotation(playerSpawn + offset, Quaternion.identity);
             player.Controller.enabled = true;
+        }
+
+        /// <summary>台に入れた・倒れて失ったガラクタを片付ける。ネットワークの物はホストが消す。</summary>
+        static void DisposeScrap(Scrap scrap)
+        {
+            if (scrap == null) return;
+            var net = scrap.GetComponent<NetScrap>();
+            if (net != null && net.IsSpawned) net.Discard();
+            else Destroy(scrap.gameObject);
+        }
+
+        void DespawnNetworkScrap()
+        {
+            if (networkManager == null || !networkManager.IsServerStarted) return;
+            foreach (var scrap in FindObjectsByType<NetScrap>())
+                if (scrap.IsSpawned) networkManager.ServerManager.Despawn(scrap.gameObject);
         }
 
         void OnDestroy()
@@ -163,6 +201,7 @@ namespace SpinTheScrap.World
             if (session != null)
             {
                 session.FloorStarted -= OnFloorStarted;
+                session.RespawnRequested -= Respawn;
                 session.Spun -= OnSpun;
             }
             if (health != null) health.Downed -= OnPlayerDowned;
@@ -177,7 +216,7 @@ namespace SpinTheScrap.World
         {
             interactor.ReleaseHeld();
             var lost = interactor.Inventory.TakeAll();
-            foreach (var scrap in lost) Destroy(scrap.gameObject);
+            foreach (var scrap in lost) DisposeScrap(scrap);
             session.ReportDowned(lost.Count);
             basePanel.OnDownedScreen = true;
             basePanel.Visible = true;
@@ -287,8 +326,11 @@ namespace SpinTheScrap.World
                 OnFloorStarted(0);
             }
             if (mode == NetMode.Host && NetSession.Instance == null) PublishFloor(); // サーバーが立ち上がったら配る
-            if (mode == NetMode.Host && NetSession.Instance != null) NetSession.Instance.PublishProgress(session.Run);
+            if (mode == NetMode.Host && NetSession.Instance != null) NetSession.Instance.PublishState(session);
             if (IsClientOnly) UpdateClientFloor();
+            // ランが終わったら（誰がエレベーターに乗っても・残機が尽きても）結果を見せる
+            if (session.Run.IsOver && !wasOver) basePanel.Visible = true;
+            wasOver = session.Run.IsOver;
             // 倒れている間は拠点メニューを閉じられない（「次の潜行へ」で起き上がる）
             if (health.IsDown) basePanel.Visible = true;
             else if (GameInput.BaseMenuPressed) basePanel.Visible = !basePanel.Visible;
@@ -331,15 +373,15 @@ namespace SpinTheScrap.World
                 if (flashlight.IsOn) flashlight.SetOn(false);
                 else if (run.FlashlightCharge > 0 || run.HasTool(ToolIds.Battery)) flashlight.SetOn(true);
             }
-            if (flashlight.IsOn && !run.DrainFlashlight(Time.deltaTime)) flashlight.SetOn(false);
+            if (flashlight.IsOn && !session.DrainFlashlight(Time.deltaTime)) flashlight.SetOn(false);
 
-            if (GameInput.BandagePressed && health.State.Current < health.State.Max && run.TryUseTool(ToolIds.Bandage))
+            if (GameInput.BandagePressed && health.State.Current < health.State.Max && session.TryUseTool(ToolIds.Bandage))
             {
                 health.Heal(session.Hazards.BandageHeal);
                 Audio.Sfx.Play2D(Audio.SfxClips.Knock, 0.4f, 0.7f);
             }
 
-            if (GameInput.FirecrackerPressed && run.TryUseTool(ToolIds.Firecracker))
+            if (GameInput.FirecrackerPressed && session.TryUseTool(ToolIds.Firecracker))
             {
                 var cam = player.ViewCamera.transform;
                 Firecracker.Throw(facility.Root, cam.position + cam.forward * 0.5f, cam.forward, session.Enemies);
@@ -358,6 +400,7 @@ namespace SpinTheScrap.World
         {
             basePanel.OnDownedScreen = false;
             DespawnNetworkEnemies();
+            DespawnNetworkScrap();
             if (scrapRoot != null) Destroy(scrapRoot.gameObject);
             if (facility != null) Destroy(facility.Root.gameObject);
 
@@ -369,7 +412,7 @@ namespace SpinTheScrap.World
             facility = FacilityBuilder.Build(layout);
             scrapRoot = new GameObject("Scrap").transform;
             SpawnScrap();
-            SpawnHazards();
+            SpawnHazards(session.RunSeed, run.Floor, session.Attempt);
             SpawnEnemies(enemyBonus);
             crawlers.Clear();
             floorStartTime = Time.time;
@@ -379,7 +422,7 @@ namespace SpinTheScrap.World
             // 台車は道具スロットで当てていれば入口に 1 台
             if (session.Run.HasTool(ToolIds.Cart))
                 Cart.Spawn(facility.Root, new Vector3(4f, 0.05f, -5f), Quaternion.identity, session.Tools);
-            PlaceMachines();
+            PlaceMachines(run.Floor, FloorRng(session.RunSeed, run.Floor, session.Attempt, 2));
             health.ResetHealth();
 
             player.Controller.enabled = false; // CharacterController は無効にしないと瞬間移動できない
@@ -413,14 +456,15 @@ namespace SpinTheScrap.World
         }
 
         /// <summary>入口以外の部屋に、深さに応じた確率で電気が流れる水たまりを置く。</summary>
-        void SpawnHazards()
+        void SpawnHazards(ulong runSeed, int floor, int attempt)
         {
+            var rng = FloorRng(runSeed, floor, attempt, 1);
             var rules = session.Hazards;
             var content = session.Content;
             foreach (var room in facility.Rooms)
             {
                 if (!room.PuddleSpot.HasValue) continue;
-                if (spawnRng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
+                if (rng.NextDouble() >= rules.PuddleChance(room.Plan.Kind, room.Plan.Depth)) continue;
                 var puddle = FacilityBuilder.CreatePuddle(room.Root, room.PuddleSpot.Value, out var surface, out var glow);
                 puddle.Init(rules, id => content.GetSymbol(id).Tags, () => session.Run.HasTool(ToolIds.InsulatedBoots), health, surface, glow);
             }
@@ -454,10 +498,19 @@ namespace SpinTheScrap.World
             }
         }
 
+        /// <summary>ガラクタを置く。協力プレイのホストではネットワークで配る（NetScrap のプレハブを本体にして Spawn）。</summary>
         void Place(SymbolDefinition def, Vector3 spot)
         {
             var rot = Quaternion.Euler(0f, spawnRng.Next(360), 0f);
-            ScrapFactory.Create(def, spot + Vector3.up * 0.4f, rot, scrapRoot);
+            var position = spot + Vector3.up * 0.4f;
+            if (mode == NetMode.Host && netScrapPrefab != null && networkManager != null && networkManager.IsServerStarted)
+            {
+                var instance = Instantiate(netScrapPrefab);
+                instance.BindHost(ScrapFactory.CreateOn(instance.gameObject, def, position, rot));
+                networkManager.ServerManager.Spawn(instance.gameObject);
+                return;
+            }
+            ScrapFactory.Create(def, position, rot, scrapRoot);
         }
 
         SymbolDefinition PickWeighted(List<SymbolDefinition> candidates, int depth)
@@ -498,11 +551,12 @@ namespace SpinTheScrap.World
         /// 入口の部屋に武器・強化・道具のスロット台とエレベーター。ボス階層では改造スロットも。
         /// 通常の階では、いちばん奥の部屋にもう 1 台（強化か道具）。
         /// </summary>
-        void PlaceMachines()
+        void PlaceMachines(int floor, Rng rng)
         {
             var root = facility.Root;
+            bool bossFloor = session.Run.Config.IsBossFloor(floor);
             var kinds = new List<MachineKind> { MachineKind.Weapon, MachineKind.Perk, MachineKind.Tool };
-            if (session.Run.IsBossFloor) kinds.Add(MachineKind.Mod);
+            if (bossFloor) kinds.Add(MachineKind.Mod);
             for (int i = 0; i < kinds.Count; i++)
                 MachineCabinet.Create(root, new Vector3(-4.5f + i * 3f, 0f, -11.3f), Vector3.forward, kinds[i], UseMachine);
 
@@ -510,7 +564,7 @@ namespace SpinTheScrap.World
                 strings => session.Run.IsLastFloor ? strings.Get("hud.elevator_exit") : strings.Format("hud.elevator_ready", session.Run.Floor + 1),
                 RideElevator);
 
-            if (session.Run.IsBossFloor)
+            if (bossFloor)
             {
                 // ボスの部屋の奥に「最後の台」：ボスに追われながら回しに行くかどうかの賭け
                 var lair = facility.Rooms.First(r => r.Plan.Kind == RoomKind.BossLair);
@@ -521,7 +575,7 @@ namespace SpinTheScrap.World
             }
             var deepest = facility.Rooms.Where(r => r.Plan.Kind != RoomKind.Entrance).OrderByDescending(r => r.Plan.Depth).FirstOrDefault();
             if (deepest == null) return;
-            var extra = spawnRng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;
+            var extra = rng.Next(2) == 0 ? MachineKind.Perk : MachineKind.Tool;
             MachineCabinet.Create(root, FacilityBuilder.RoomCenter(deepest.Plan) + new Vector3(8f, 0f, -10.3f), Vector3.forward, extra, UseMachine);
         }
 
@@ -532,7 +586,7 @@ namespace SpinTheScrap.World
             scraps.AddRange(who.Inventory.TakeAll());
             var held = who.TakeHeld();
             if (held != null && !scraps.Contains(held)) scraps.Add(held);
-            int fed = session.Feed(scraps, localOwnerId);
+            int fed = session.Feed(scraps, session.LocalPlayerId);
             if (fed > 0) Audio.Sfx.Play2D(Audio.SfxClips.Extract, 0.6f);
             currentCabinet = cabinet;
             basePanel.Machine = cabinet.Kind;

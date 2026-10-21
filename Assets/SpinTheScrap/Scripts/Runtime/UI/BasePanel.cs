@@ -40,7 +40,16 @@ namespace SpinTheScrap.UI
         /// <summary>今操作している台の種類。台に近づいて開いたときにその種類になる。</summary>
         public MachineKind Machine { get; set; } = MachineKind.Weapon;
 
-        public void Init(RunSession runSession) => session = runSession;
+        public void Init(RunSession runSession)
+        {
+            session = runSession;
+            session.Spun += PlaySpinSound; // 協力プレイのクライアントでは、ホストの結果が届いてから鳴る
+        }
+
+        void OnDestroy()
+        {
+            if (session != null) session.Spun -= PlaySpinSound;
+        }
 
         void Update()
         {
@@ -144,7 +153,7 @@ namespace SpinTheScrap.UI
                 int instanceId = group.Last().InstanceId;
                 var kind = Machine;
                 if (GUILayout.Button(s.Format("base.remove", session.Medals(run.RemovalFee))))
-                    pending = () => run.TryRemoveFromReel(kind, instanceId);
+                    pending = () => session.RemoveFromReel(kind, instanceId);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -164,7 +173,7 @@ namespace SpinTheScrap.UI
                 GUILayout.Label(s.Get(def.NameKey) + "：" + s.Get(def.DescriptionKey), GUILayout.Width(labelWidth));
                 GUI.enabled = run.Medals >= def.Price && run.Relics.Count < run.Config.MaxRelics;
                 if (GUILayout.Button(s.Format("base.buy", session.Medals(def.Price))))
-                    pending = () => { if (run.TryBuyRelic(id)) Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
+                    pending = () => { session.BuyRelic(id); Sfx.Play2D(SfxClips.Coin, 0.6f, 0.8f); };
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
@@ -238,11 +247,11 @@ namespace SpinTheScrap.UI
             }
         }
 
-        void SpinWithSound()
+        void SpinWithSound() => session.Spin(Machine);
+
+        static void PlaySpinSound(MachineOutcome outcome)
         {
-            if (!session.Spin(Machine)) return;
             Sfx.Play2D(SfxClips.Spin, 0.7f);
-            var outcome = session.LastOutcome;
             if (outcome.Reading.Jackpot || outcome.Reading.Tier >= 3 || outcome.LevelUps.Count > 0) Sfx.Play2D(SfxClips.Win, 0.6f);
         }
 

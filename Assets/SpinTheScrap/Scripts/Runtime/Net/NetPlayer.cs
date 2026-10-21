@@ -1,7 +1,11 @@
+using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using SpinTheScrap.Core;
+using SpinTheScrap.Interaction;
 using SpinTheScrap.Player;
+using SpinTheScrap.Session;
 using SpinTheScrap.World;
 using UnityEngine;
 
@@ -11,6 +15,7 @@ namespace SpinTheScrap.Net
     /// ネットワーク上のプレイヤー 1 人分の分身。持ち主は自分の一人称プレイヤー（LocalTarget）の位置を写し、
     /// NetworkTransform（クライアント権威）がほかの人へ配る。ほかの人の分身は仮素材の人形で見せる。
     /// ホスト権威型：クライアントの攻撃・音はホストへ送り、ホストの敵からのダメージはその人へ返す。
+    /// スロット台の操作（台に入れる・回す・換金など）もここからホストへ送り、ホストの RunSession が行う。
     /// </summary>
     public sealed class NetPlayer : NetworkBehaviour
     {
@@ -26,6 +31,12 @@ namespace SpinTheScrap.Net
         PlayerTarget hostTarget;
         CapsuleCollider hitBox;
         bool forwardingNoise;
+        int sentWeaponSerial = -1;
+        int sentWeaponRemaining = -1;
+        double pendingDrain;
+        float nextDrainTime;
+
+        static RunSession Run => NetSession.LocalSession;
 
         /// <summary>このマシンの一人称プレイヤー（Phase0Bootstrap が設定する）。</summary>
         public static Transform LocalTarget { get; set; }
@@ -41,6 +52,7 @@ namespace SpinTheScrap.Net
             if (IsOwner)
             {
                 Local = this;
+                if (Run != null) Run.LocalPlayerId = OwnerId; // 武器と強化はこの番号で持つ
                 // クライアントで鳴った音（足音・攻撃・衝突）をホストの敵にも聞かせる
                 if (!IsServerStarted)
                 {
@@ -89,6 +101,187 @@ namespace SpinTheScrap.Net
             transform.SetPositionAndRotation(LocalTarget.position, Quaternion.Euler(0f, LocalTarget.eulerAngles.y, 0f));
             bool isDown = LocalHealth != null && LocalHealth.IsDown;
             if (isDown != down.Value) SetDownRpc(isDown);
+            if (!IsServerStarted) ReportLocalState();
+        }
+
+        /// <summary>クライアント：自分で減らした武器の耐久・弾数と懐中電灯の電池をホストへ伝える。</summary>
+        void ReportLocalState()
+        {
+            if (Run == null) return;
+            var me = Run.Run.Player(Run.LocalPlayerId);
+            int remaining = me.Weapon != null ? me.Weapon.Remaining : 0;
+            if (me.WeaponSerial != sentWeaponSerial || remaining != sentWeaponRemaining)
+            {
+                sentWeaponSerial = me.WeaponSerial;
+                sentWeaponRemaining = remaining;
+                if (me.Weapon != null) WeaponStateRpc(me.WeaponSerial, remaining);
+            }
+            if (pendingDrain > 0 && Time.unscaledTime >= nextDrainTime)
+            {
+                DrainRpc(pendingDrain);
+                pendingDrain = 0;
+                nextDrainTime = Time.unscaledTime + 0.5f;
+            }
+        }
+
+        // ---- スロット台の操作（クライアント → ホスト） ----
+
+        /// <summary>ホスト：操作を受けたら、すぐ状態を配る。</summary>
+        static void Push()
+        {
+            if (NetSession.Instance != null && Run != null) NetSession.Instance.PublishState(Run, immediately: true);
+        }
+
+        PlayerLoadout Loadout => Run.Run.Player(OwnerId);
+
+        public void Feed(List<Scrap> scraps, double brokenRatio)
+        {
+            var items = new List<NetScrap>();
+            var factors = new List<double>();
+            foreach (var scrap in scraps)
+            {
+                var net = scrap.GetComponent<NetScrap>();
+                if (net == null) continue;
+                scrap.SetPresent(false); // ホストが消すまでの間も見えないように
+                items.Add(net);
+                factors.Add(scrap.ValueFactor(brokenRatio));
+            }
+            if (items.Count > 0) FeedRpc(items.ToArray(), factors.ToArray());
+        }
+
+        [ServerRpc]
+        void FeedRpc(NetScrap[] items, double[] factors)
+        {
+            if (Run == null || items == null || factors == null) return;
+            for (int i = 0; i < items.Length && i < factors.Length; i++)
+                if (items[i] != null) items[i].FeedOnHost(Run, factors[i], OwnerId);
+            Push();
+        }
+
+        public void Spin(MachineKind kind) => SpinRpc((int)kind);
+
+        [ServerRpc]
+        void SpinRpc(int kind)
+        {
+            if (Run == null) return;
+            string before = Run.SpinFor((MachineKind)kind, OwnerId);
+            if (before == null) return;
+            ReplaySpinRpc(Owner, before, kind); // 状態より先に届く（同じ順で送られる）
+            Push();
+        }
+
+        /// <summary>ホストが回す直前の状態。同じように回して、出た物を見せる。</summary>
+        [TargetRpc]
+        void ReplaySpinRpc(NetworkConnection target, string before, int kind)
+        {
+            if (Run != null) Run.ReplaySpin(before, (MachineKind)kind);
+        }
+
+        public void ConvertToMedals(int haulId) => ConvertRpc(haulId);
+
+        [ServerRpc]
+        void ConvertRpc(int haulId)
+        {
+            var item = Run?.FindHaul(haulId);
+            if (item == null) return;
+            Run.ConvertToMedals(item, OwnerId);
+            Push();
+        }
+
+        public void AddToReel(int haulId, MachineKind kind) => AddToReelRpc(haulId, (int)kind);
+
+        [ServerRpc]
+        void AddToReelRpc(int haulId, int kind)
+        {
+            var item = Run?.FindHaul(haulId);
+            if (item == null) return;
+            Run.AddToReel(item, (MachineKind)kind);
+            Push();
+        }
+
+        public void RemoveFromReel(MachineKind kind, int instanceId) => RemoveFromReelRpc((int)kind, instanceId);
+
+        [ServerRpc]
+        void RemoveFromReelRpc(int kind, int instanceId)
+        {
+            if (Run == null) return;
+            Run.RemoveFromReel((MachineKind)kind, instanceId);
+            Push();
+        }
+
+        public void BuyRelic(string relicId) => BuyRelicRpc(relicId);
+
+        [ServerRpc]
+        void BuyRelicRpc(string relicId)
+        {
+            if (Run == null) return;
+            Run.BuyRelic(relicId);
+            Push();
+        }
+
+        public void AdvanceFloor() => AdvanceFloorRpc();
+
+        [ServerRpc]
+        void AdvanceFloorRpc()
+        {
+            if (Run == null) return;
+            Run.TryAdvanceFloor();
+            Push();
+        }
+
+        public void NewRun() => NewRunRpc();
+
+        [ServerRpc]
+        void NewRunRpc()
+        {
+            if (Run == null || !Run.Run.IsOver) return; // ランの途中では始め直さない
+            Run.NewRun();
+            Push();
+        }
+
+        public void ReportDowned(int lostCount) => DownedRpc(lostCount);
+
+        [ServerRpc]
+        void DownedRpc(int lostCount)
+        {
+            if (Run == null) return;
+            Run.ReportDowned(lostCount);
+            Push();
+        }
+
+        public void UseTool(string toolId) => UseToolRpc(toolId);
+
+        [ServerRpc]
+        void UseToolRpc(string toolId)
+        {
+            if (Run == null) return;
+            Run.Run.TryUseTool(toolId);
+            Push();
+        }
+
+        public void DrainFlashlight(double seconds) => pendingDrain += seconds;
+
+        [ServerRpc]
+        void DrainRpc(double seconds)
+        {
+            if (Run != null && seconds > 0) Run.Run.DrainFlashlight(seconds);
+        }
+
+        public void DiscardSpentWeapon(int weaponSerial) => DiscardWeaponRpc(weaponSerial);
+
+        [ServerRpc]
+        void DiscardWeaponRpc(int weaponSerial)
+        {
+            if (Run == null || Loadout.WeaponSerial != weaponSerial) return;
+            Loadout.Weapon = null;
+            Push();
+        }
+
+        [ServerRpc]
+        void WeaponStateRpc(int weaponSerial, int remaining)
+        {
+            if (Run == null || Loadout.WeaponSerial != weaponSerial || Loadout.Weapon == null) return;
+            Loadout.Weapon.SetRemaining(remaining);
         }
 
         void ForwardNoise(Vector3 position, float radius) => NoiseRpc(position, radius);
@@ -140,5 +333,24 @@ namespace SpinTheScrap.Net
             go.GetComponent<Renderer>().sharedMaterial = MaterialUtil.Create(color);
             Destroy(go.GetComponent<Collider>());
         }
+    }
+
+    /// <summary>クライアントの RunSession.Remote。操作を自分の分身（NetPlayer.Local）からホストへ送る。</summary>
+    public sealed class RemoteRun : IRunAuthority
+    {
+        static NetPlayer P => NetPlayer.Local;
+
+        public void Feed(List<Scrap> scraps, double brokenRatio) => P?.Feed(scraps, brokenRatio);
+        public void Spin(MachineKind kind) => P?.Spin(kind);
+        public void ConvertToMedals(int haulId) => P?.ConvertToMedals(haulId);
+        public void AddToReel(int haulId, MachineKind kind) => P?.AddToReel(haulId, kind);
+        public void RemoveFromReel(MachineKind kind, int instanceId) => P?.RemoveFromReel(kind, instanceId);
+        public void BuyRelic(string relicId) => P?.BuyRelic(relicId);
+        public void AdvanceFloor() => P?.AdvanceFloor();
+        public void NewRun() => P?.NewRun();
+        public void ReportDowned(int lostCount) => P?.ReportDowned(lostCount);
+        public void UseTool(string toolId) => P?.UseTool(toolId);
+        public void DrainFlashlight(double seconds) => P?.DrainFlashlight(seconds);
+        public void DiscardSpentWeapon(int weaponSerial) => P?.DiscardSpentWeapon(weaponSerial);
     }
 }

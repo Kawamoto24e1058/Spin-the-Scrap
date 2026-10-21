@@ -261,5 +261,29 @@ namespace SpinTheScrap.Tests
             run.TrySpin(MachineKind.Tool, 0, out var outcome);
             Assert.AreEqual(10 - outcome.Reading.Result.DestroyedInstances.Count(), run.ReelOf(MachineKind.Tool).Count);
         }
+    
+        [Test]
+        public void SavedStateReplaysTheSameSpins()
+        {
+            var host = Rich(7);
+            host.AddToReel(MachineKind.Weapon, "broken_radio", 1);
+            host.TrySpin(MachineKind.Weapon, 1, out _);
+            host.TrySpin(MachineKind.Perk, 0, out _);
+            host.AddTool(ToolIds.Bandage, 2);
+            host.ReportKill(false);
+            string saved = host.Save();
+
+            var client = Rich(99);
+            client.Load(saved);
+            Assert.AreEqual(saved, client.Save(), "読み戻すと同じ状態");
+            Assert.AreEqual(host.Player(1).Weapon.Definition.Id, client.Player(1).Weapon.Definition.Id);
+            Assert.AreEqual(host.Player(1).WeaponSerial, client.Player(1).WeaponSerial);
+
+            host.TrySpin(MachineKind.Mod, 1, out var a);
+            client.TrySpin(MachineKind.Mod, 1, out var b);
+            Assert.AreEqual(a.Reading.Result.Total, b.Reading.Result.Total, "同じ乱数で同じ結果");
+            Assert.AreEqual(a.Mod, b.Mod);
+            Assert.AreEqual(host.Save(), client.Save());
+        }
     }
 }

@@ -49,6 +49,26 @@ namespace SpinTheScrap.World
             { "broken_vending_machine", new Look(PrimitiveType.Cube, new Vector3(1.0f, 1.8f, 0.8f), new Color(0.6f, 0.15f, 0.15f)) },
         };
 
+        /// <summary>
+        /// 協力プレイ用：渡した物（NetScrap のプレハブ）を本体にして、見た目は子に作る。
+        /// 本体の大きさを 1 のままにしておくため（NetworkTransform が位置と向きだけを配る）。
+        /// </summary>
+        public static Scrap CreateOn(GameObject root, SymbolDefinition def, Vector3 position, Quaternion rotation)
+        {
+            var look = Looks.TryGetValue(def.Id, out var l) ? l : DefaultLook(def);
+            root.transform.SetPositionAndRotation(position, rotation);
+            var visual = GameObject.CreatePrimitive(look.Shape);
+            visual.name = "Visual";
+            visual.transform.SetParent(root.transform, false);
+            visual.transform.localScale = look.Scale;
+            visual.GetComponent<Renderer>().sharedMaterial = MaterialUtil.Create(look.Color);
+            root.name = def.Id;
+            var scrap = root.GetComponent<Scrap>();
+            if (scrap == null) scrap = root.AddComponent<Scrap>();
+            scrap.Configure(def.Id, def.Size, def.Fragile);
+            return scrap;
+        }
+
         public static Scrap Create(SymbolDefinition def, Vector3 position, Quaternion rotation, Transform parent, GameObject modelPrefab = null)
         {
             GameObject go;

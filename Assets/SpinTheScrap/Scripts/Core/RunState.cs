@@ -9,8 +9,17 @@ namespace SpinTheScrap.Core
     {
         public int Id { get; }
         public PerkState Perks { get; } = new PerkState();
+        WeaponInstance weapon;
+
         /// <summary>手に持っている武器（なければ素手）。</summary>
-        public WeaponInstance Weapon { get; set; }
+        public WeaponInstance Weapon
+        {
+            get => weapon;
+            set { weapon = value; WeaponSerial++; }
+        }
+
+        /// <summary>武器を持ち替えた・改造した回数（協力プレイで「同じ武器のままか」を見分ける）。</summary>
+        public int WeaponSerial { get; set; }
 
         public PlayerLoadout(int id) => Id = id;
     }
@@ -176,7 +185,11 @@ namespace SpinTheScrap.Core
                     break;
                 case MachineKind.Mod:
                     var mod = WeaponInstance.ModFor(reading.Family);
-                    if (player.Weapon.AddMod(mod)) outcome.Mod = mod;
+                    if (player.Weapon.AddMod(mod))
+                    {
+                        outcome.Mod = mod;
+                        player.WeaponSerial++; // 弾数の改造で補充されるので、別の武器として扱う
+                    }
                     break;
                 case MachineKind.Tool:
                     GrantTool(reading, outcome);
@@ -364,6 +377,101 @@ namespace SpinTheScrap.Core
             int bonus = PendingEnemyBonus;
             PendingEnemyBonus = 0;
             return bonus;
+        }
+
+        // ---- 状態の保存と復元（協力プレイでホストの状態をクライアントへ写す） ----
+
+        /// <summary>ランの状態をすべて文字列にする。同じ内容の RunState に Load すれば、同じ乱数で同じ結果になる。</summary>
+        public string Save()
+        {
+            var w = new SnapshotWriter();
+            w.Write(rng.State).Write(nextInstanceId).Write(Medals).Write(Floor).Write(Lives);
+            w.Write(IsFailed).Write(IsCleared).Write(PendingEnemyBonus);
+            w.Write(Kills).Write(TotalSpins).Write(Jackpots).Write(BestTier).Write(FlashlightCharge);
+            w.Write((int)Objective.Kind).Write(Objective.Target).Write(Objective.Progress);
+            foreach (var kind in AllMachines)
+            {
+                w.Write(spinsThisFloor[kind]).Write(reels[kind].Count);
+                foreach (var s in reels[kind]) w.Write(s.InstanceId).Write(s.SymbolId).Write(s.OwnerId);
+            }
+            w.Write(relics.Count);
+            foreach (var r in relics) w.Write(r.Id);
+            w.Write(relicOffers.Count);
+            foreach (var id in relicOffers) w.Write(id);
+            w.Write(tools.Count);
+            foreach (var pair in tools.OrderBy(p => p.Key, StringComparer.Ordinal)) w.Write(pair.Key).Write(pair.Value);
+            w.Write(players.Count);
+            foreach (var p in players.Values.OrderBy(p => p.Id))
+            {
+                w.Write(p.Id).Write(p.WeaponSerial);
+                var xp = p.Perks.AllXp.OrderBy(x => (int)x.Key).ToList();
+                w.Write(xp.Count);
+                foreach (var x in xp) w.Write((int)x.Key).Write(x.Value);
+                w.Write(p.Weapon != null);
+                if (p.Weapon == null) continue;
+                w.Write(p.Weapon.Definition.Id).Write(p.Weapon.Mods.Count);
+                foreach (var m in p.Weapon.Mods) w.Write((int)m);
+                w.Write(p.Weapon.Remaining);
+            }
+            return w.ToString();
+        }
+
+        /// <summary>Save で作った文字列から状態を戻す（同じ内容・設定で作った RunState に対して）。</summary>
+        public void Load(string snapshot)
+        {
+            var r = new SnapshotReader(snapshot);
+            rng.State = r.ULong();
+            nextInstanceId = r.Int();
+            Medals = r.Double();
+            Floor = r.Int();
+            Lives = r.Int();
+            IsFailed = r.Bool();
+            IsCleared = r.Bool();
+            PendingEnemyBonus = r.Int();
+            Kills = r.Int();
+            TotalSpins = r.Int();
+            Jackpots = r.Int();
+            BestTier = r.Int();
+            FlashlightCharge = r.Double();
+            var objectiveKind = (FloorObjectiveKind)r.Int();
+            double target = r.Double();
+            Objective = new FloorObjective(objectiveKind, target);
+            Objective.Report(objectiveKind, r.Double());
+            foreach (var kind in AllMachines)
+            {
+                spinsThisFloor[kind] = r.Int();
+                var reel = reels[kind];
+                reel.Clear();
+                int count = r.Int();
+                for (int i = 0; i < count; i++) reel.Add(new SymbolInstance(r.Int(), r.String(), r.Int()));
+            }
+            relics.Clear();
+            int relicCount = r.Int();
+            for (int i = 0; i < relicCount; i++) relics.Add(db.GetRelic(r.String()));
+            relicOffers.Clear();
+            int offerCount = r.Int();
+            for (int i = 0; i < offerCount; i++) relicOffers.Add(r.String());
+            tools.Clear();
+            int toolCount = r.Int();
+            for (int i = 0; i < toolCount; i++) tools[r.String()] = r.Int();
+            players.Clear();
+            int playerCount = r.Int();
+            for (int i = 0; i < playerCount; i++)
+            {
+                var p = Player(r.Int());
+                int serial = r.Int();
+                int xpCount = r.Int();
+                for (int j = 0; j < xpCount; j++) p.Perks.SetXp((SymbolTag)r.Int(), r.Double());
+                if (r.Bool())
+                {
+                    var weapon = new WeaponInstance(weaponCatalog.Get(r.String()));
+                    int modCount = r.Int();
+                    for (int j = 0; j < modCount; j++) weapon.AddMod((WeaponModKind)r.Int());
+                    weapon.SetRemaining(r.Int());
+                    p.Weapon = weapon;
+                }
+                p.WeaponSerial = serial;
+            }
         }
 
         void RollRelicOffers()

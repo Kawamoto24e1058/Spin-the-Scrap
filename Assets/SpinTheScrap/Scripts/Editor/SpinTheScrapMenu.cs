@@ -19,6 +19,7 @@ namespace SpinTheScrap.EditorTools
         const string NetPlayerPath = PrefabFolder + "/NetPlayer.prefab";
         const string NetSessionPath = PrefabFolder + "/NetSession.prefab";
         const string NetEnemyPath = PrefabFolder + "/NetEnemy.prefab";
+        const string NetScrapPath = PrefabFolder + "/NetScrap.prefab";
 
         [MenuItem("Spin the Scrap/Create Phase 0 Scene", priority = 0)]
         public static void CreatePhase0Scene()
@@ -52,6 +53,7 @@ namespace SpinTheScrap.EditorTools
             so.FindProperty("networkManager").objectReferenceValue = manager;
             so.FindProperty("netSessionPrefab").objectReferenceValue = prefabs.session;
             so.FindProperty("netEnemyPrefab").objectReferenceValue = prefabs.enemy;
+            so.FindProperty("netScrapPrefab").objectReferenceValue = prefabs.scrap;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -61,37 +63,63 @@ namespace SpinTheScrap.EditorTools
         }
 
         /// <summary>協力プレイのプレハブ（プレイヤーの分身・共有状態）を作る。FishNet の DefaultPrefabObjects に自動で載る。</summary>
-        static (FishNet.Object.NetworkObject player, Net.NetSession session, Net.NetEnemy enemy) CreateNetworkPrefabs()
+        static (FishNet.Object.NetworkObject player, Net.NetSession session, Net.NetEnemy enemy, Net.NetScrap scrap) CreateNetworkPrefabs()
         {
             Directory.CreateDirectory(PrefabFolder);
             AssetDatabase.Refresh();
 
-            var playerGo = new GameObject("NetPlayer");
-            playerGo.AddComponent<FishNet.Object.NetworkObject>();
-            playerGo.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
-            playerGo.AddComponent<Net.NetPlayer>();
-            var player = PrefabUtility.SaveAsPrefabAsset(playerGo, NetPlayerPath);
-            Object.DestroyImmediate(playerGo);
-
-            var sessionGo = new GameObject("NetSession");
-            sessionGo.AddComponent<FishNet.Object.NetworkObject>();
-            sessionGo.AddComponent<Net.NetSession>();
-            var session = PrefabUtility.SaveAsPrefabAsset(sessionGo, NetSessionPath);
-            Object.DestroyImmediate(sessionGo);
-
+            var player = LoadOrCreatePrefab(NetPlayerPath, go =>
+            {
+                go.AddComponent<FishNet.Object.NetworkObject>();
+                go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
+                go.AddComponent<Net.NetPlayer>();
+            });
+            var session = LoadOrCreatePrefab(NetSessionPath, go =>
+            {
+                go.AddComponent<FishNet.Object.NetworkObject>();
+                go.AddComponent<Net.NetSession>();
+            });
             // 敵：位置はホストが決める（サーバー権威の NetworkTransform）
-            var enemyGo = new GameObject("NetEnemy");
-            enemyGo.AddComponent<FishNet.Object.NetworkObject>();
-            var transform = enemyGo.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
-            var so = new SerializedObject(transform);
-            so.FindProperty("_clientAuthoritative").boolValue = false;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            enemyGo.AddComponent<Net.NetEnemy>();
-            var enemy = PrefabUtility.SaveAsPrefabAsset(enemyGo, NetEnemyPath);
-            Object.DestroyImmediate(enemyGo);
+            var enemy = LoadOrCreatePrefab(NetEnemyPath, go =>
+            {
+                go.AddComponent<FishNet.Object.NetworkObject>();
+                var transform = go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
+                var so = new SerializedObject(transform);
+                so.FindProperty("_clientAuthoritative").boolValue = false;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                go.AddComponent<Net.NetEnemy>();
+            });
+            // ガラクタ：位置は持ち主が決める（拾った人。誰も持っていなければホスト）
+            var scrap = LoadOrCreatePrefab(NetScrapPath, go =>
+            {
+                go.AddComponent<FishNet.Object.NetworkObject>();
+                go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
+                go.AddComponent<Net.NetScrap>();
+            });
+            // 抜けた人が持っていた物は消さずに残す（NetScrap がその場に戻す）
+            var scrapNob = new SerializedObject(scrap.GetComponent<FishNet.Object.NetworkObject>());
+            scrapNob.FindProperty("_preventDespawnOnDisconnect").boolValue = true;
+            scrapNob.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(scrap);
 
             AssetDatabase.SaveAssets();
-            return (player.GetComponent<FishNet.Object.NetworkObject>(), session.GetComponent<Net.NetSession>(), enemy.GetComponent<Net.NetEnemy>());
+            return (player.GetComponent<FishNet.Object.NetworkObject>(), session.GetComponent<Net.NetSession>(), enemy.GetComponent<Net.NetEnemy>(),
+                scrap.GetComponent<Net.NetScrap>());
+        }
+
+        /// <summary>
+        /// プレハブがあればそのまま使い、なければ作る。上書きすると FishNet がプレハブに付けた番号（AssetPathHash）が
+        /// 消えてしまい、ネットワークで出せなくなるため。作り直したいときはプレハブを消してからメニューを実行する。
+        /// </summary>
+        static GameObject LoadOrCreatePrefab(string path, System.Action<GameObject> build)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+            var go = new GameObject(Path.GetFileNameWithoutExtension(path));
+            build(go);
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            return prefab;
         }
 
         [MenuItem("Spin the Scrap/Generate MVP Content Assets", priority = 20)]

@@ -129,6 +129,19 @@ namespace SpinTheScrap.Tests
         }
 
         [Test]
+        public void PerkXpAndWeaponStateCanBeCopied()
+        {
+            var perks = new PerkState();
+            perks.SetXp(SymbolTag.Metal, PerkState.Thresholds[2]);
+            Assert.AreEqual(3, perks.Level(SymbolTag.Metal));
+            var pipe = new WeaponInstance(WeaponCatalog.CreateMvp().Get("pipe"));
+            pipe.SetRemaining(5);
+            Assert.AreEqual(5, pipe.Remaining);
+            pipe.SetRemaining(10000);
+            Assert.AreEqual(pipe.Capacity, pipe.Remaining, "上限まで");
+        }
+
+        [Test]
         public void PerksShapeStats()
         {
             var perks = new PerkState();

@@ -98,7 +98,7 @@ namespace SpinTheScrap.Interaction
         void Update()
         {
             // 持っている物が破棄・回収されたら手を空ける（Unity の == null は破棄済みも null 扱い）
-            if (!ReferenceEquals(held, null) && (held == null || !held.gameObject.activeInHierarchy)) Release();
+            if (!ReferenceEquals(held, null) && (held == null || !held.gameObject.activeInHierarchy || held.IsStowed)) Release();
             if (!ReferenceEquals(pushed, null) && pushed == null) StopPushing(); // 潜行が終わって台車が消えた
 
             if (controller.InputEnabled)
@@ -228,6 +228,7 @@ namespace SpinTheScrap.Interaction
 
         void Grab(Scrap scrap, Vector3 point)
         {
+            scrap.NotifyClaimed();
             held = scrap;
             held.IsHeld = true;
             var body = held.Body;
@@ -302,9 +303,8 @@ namespace SpinTheScrap.Interaction
                 distance = Mathf.Max(0.2f, hit.distance - 0.25f);
 
             scrap.transform.position = origin + forward * distance;
-            scrap.gameObject.SetActive(true);
-            scrap.Body.linearVelocity = Vector3.zero;
-            scrap.Body.angularVelocity = Vector3.zero;
+            scrap.NotifyClaimed();
+            scrap.SetStowed(false);
         }
 
         void DriveHeld()

@@ -44,6 +44,40 @@ namespace SpinTheScrap.Interaction
         public bool IsHeld { get; set; }
 
         public event Action<Scrap> Broken;
+        /// <summary>誰かが手に取った（持った・しまった・取り出した）。協力プレイでは NetScrap が持ち主を切り替える。</summary>
+        public event Action<Scrap> Claimed;
+        /// <summary>しまった（true）・取り出した（false）。協力プレイでは NetScrap がほかの人の画面でも隠す。</summary>
+        public event Action<Scrap, bool> StowedChanged;
+
+        /// <summary>インベントリにしまってある（見えず、当たり判定もない）。</summary>
+        public bool IsStowed { get; private set; }
+
+        public void NotifyClaimed() => Claimed?.Invoke(this);
+
+        /// <summary>
+        /// しまう・取り出す。オブジェクトは無効にせず、見た目・当たり判定・物理だけを止める
+        /// （協力プレイで、しまっている間もネットワーク上の物として残すため）。
+        /// </summary>
+        public void SetStowed(bool stowed)
+        {
+            if (IsStowed == stowed) return;
+            IsStowed = stowed;
+            SetPresent(!stowed);
+            Body.isKinematic = stowed;
+            if (!stowed)
+            {
+                Body.linearVelocity = Vector3.zero;
+                Body.angularVelocity = Vector3.zero;
+            }
+            StowedChanged?.Invoke(this, stowed);
+        }
+
+        /// <summary>見た目と当たり判定を出す・消す（ほかの人がしまったときにも使う）。</summary>
+        public void SetPresent(bool present)
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = present;
+            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = present;
+        }
 
         public static float MassFor(ScrapSize size)
         {

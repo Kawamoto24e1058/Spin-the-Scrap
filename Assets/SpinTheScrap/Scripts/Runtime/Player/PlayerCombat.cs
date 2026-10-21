@@ -52,7 +52,15 @@ namespace SpinTheScrap.Player
         /// <summary>攻撃した（WeaponViewModel が振る・反動の動きを付ける）。</summary>
         public event System.Action<WeaponInstance> Attacked;
 
-        public WeaponInstance CurrentWeapon => session != null ? session.Run.Player(session.LocalPlayerId).Weapon ?? fists : fists;
+        /// <summary>手に持っている武器。壊れた武器（協力プレイでホストが捨てるまで残る）は素手として扱う。</summary>
+        public WeaponInstance CurrentWeapon
+        {
+            get
+            {
+                var weapon = session != null ? session.Run.Player(session.LocalPlayerId).Weapon : null;
+                return weapon != null && !weapon.IsSpent ? weapon : fists;
+            }
+        }
         bool HandsFull => interactor.Held != null || interactor.Pushed != null;
 
         public void Init(RunSession runSession) => session = runSession;
@@ -131,7 +139,7 @@ namespace SpinTheScrap.Player
 
             if (weapon != fists && weapon.TryUse() && weapon.IsSpent)
             {
-                session.Run.Player(session.LocalPlayerId).Weapon = null;
+                session.DiscardSpentWeapon();
                 WeaponBrokeTime = Time.time;
                 Sfx.Play2D(SfxClips.Shatter, 0.5f, 0.6f);
             }

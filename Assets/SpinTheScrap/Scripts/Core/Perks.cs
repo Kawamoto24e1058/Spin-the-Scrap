@@ -37,6 +37,17 @@ namespace SpinTheScrap.Core
             return Level(tag) > before;
         }
 
+        /// <summary>経験値の入っている強化すべて（状態の保存用）。</summary>
+        public IEnumerable<KeyValuePair<SymbolTag, double>> AllXp => xp;
+
+        /// <summary>経験値をそのまま設定する（協力プレイで、ホストが計算した値をクライアントに写す）。</summary>
+        public void SetXp(SymbolTag tag, double value)
+        {
+            if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+            if (tag == SymbolTag.None) return;
+            xp[tag] = value;
+        }
+
         /// <summary>レベルから能力値を求める。</summary>
         public PlayerStats Stats(double baseMaxHealth)
         {

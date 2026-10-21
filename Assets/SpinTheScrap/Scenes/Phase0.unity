@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &46860544
+--- !u!1 &828420377
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 46860546}
-  - component: {fileID: 46860545}
+  - component: {fileID: 828420379}
+  - component: {fileID: 828420378}
   m_Layer: 0
   m_Name: Phase0
   m_TagString: Untagged
@@ -136,30 +136,30 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &46860545
+--- !u!114 &828420378
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 46860544}
+  m_GameObject: {fileID: 828420377}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a329509e5cf84adb8019edf10719a8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpinTheScrap.Runtime::SpinTheScrap.World.Phase0Bootstrap
   playerSpawn: {x: 0, y: 1.1, z: -8}
-  localOwnerId: 0
-  networkManager: {fileID: 904318809}
+  networkManager: {fileID: 1672053401}
   netSessionPrefab: {fileID: 7810840057963372611, guid: 90083d06d505c4a899101096a0d5b019, type: 3}
   netEnemyPrefab: {fileID: 5438463677536830795, guid: 640aa40b6f28d417ca7c0aa0afab112e, type: 3}
---- !u!4 &46860546
+  netScrapPrefab: {fileID: 6089455605497015404, guid: 6720be4f66a3a4b00b706706482da0b0, type: 3}
+--- !u!4 &828420379
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 46860544}
+  m_GameObject: {fileID: 828420377}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -168,7 +168,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &904318808
+--- !u!1 &1672053400
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -176,10 +176,10 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 904318812}
-  - component: {fileID: 904318809}
-  - component: {fileID: 904318811}
-  - component: {fileID: 904318810}
+  - component: {fileID: 1672053404}
+  - component: {fileID: 1672053401}
+  - component: {fileID: 1672053403}
+  - component: {fileID: 1672053402}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -187,13 +187,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &904318809
+--- !u!114 &1672053401
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 904318808}
+  m_GameObject: {fileID: 1672053400}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
@@ -206,13 +206,13 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 0}
   _persistence: 0
---- !u!114 &904318810
+--- !u!114 &1672053402
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 904318808}
+  m_GameObject: {fileID: 1672053400}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
@@ -221,13 +221,13 @@ MonoBehaviour:
   _playerPrefab: {fileID: 2499096331348463568, guid: 0a3e216bb019544128ae5d8dacb2c402, type: 3}
   _addToDefaultScene: 1
   Spawns: []
---- !u!114 &904318811
+--- !u!114 &1672053403
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 904318808}
+  m_GameObject: {fileID: 1672053400}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
@@ -242,13 +242,13 @@ MonoBehaviour:
   _port: 7770
   _maximumClients: 4095
   _clientAddress: localhost
---- !u!4 &904318812
+--- !u!4 &1672053404
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 904318808}
+  m_GameObject: {fileID: 1672053400}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -261,5 +261,5 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 904318812}
-  - {fileID: 46860546}
+  - {fileID: 1672053404}
+  - {fileID: 828420379}

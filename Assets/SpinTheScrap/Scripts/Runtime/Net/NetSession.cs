@@ -7,18 +7,16 @@ namespace SpinTheScrap.Net
     /// <summary>
     /// 協力プレイで全員が共有するランの状態（ホスト権威型。要件書 8.2）。ホストが値を決めて配り、
     /// クライアントは同じシード・階層・やり直し回数から同じ間取りを組み立てる。
-    /// 敵・ガラクタ・スロット台の結果の同期は次の段階（docs/floor-design.md「協力プレイ」）。
+    /// ランの中身（メダル・リール・強化・武器・台に入れたガラクタ）は文字列にまとめて配る。
     /// </summary>
     public sealed class NetSession : NetworkBehaviour
     {
         readonly SyncVar<ulong> runSeed = new SyncVar<ulong>();
         readonly SyncVar<int> floor = new SyncVar<int>();
         readonly SyncVar<int> attempt = new SyncVar<int>();
-        readonly SyncVar<float> medals = new SyncVar<float>();
-        readonly SyncVar<int> lives = new SyncVar<int>();
-        readonly SyncVar<int> objectiveKind = new SyncVar<int>();
-        readonly SyncVar<int> objectiveProgress = new SyncVar<int>();
-        readonly SyncVar<int> objectiveTarget = new SyncVar<int>();
+        /// <summary>ランの状態すべて（RunSession.SaveState）。クライアントはこれを写して、メニュー・HUD・自分の武器と強化に使う。</summary>
+        readonly SyncVar<string> state = new SyncVar<string>();
+        float nextStateTime;
 
         public static NetSession Instance { get; private set; }
 
@@ -28,11 +26,8 @@ namespace SpinTheScrap.Net
         public ulong RunSeed => runSeed.Value;
         public int Floor => floor.Value;
         public int Attempt => attempt.Value;
-        public double Medals => medals.Value;
-        public int Lives => lives.Value;
-        public Core.FloorObjectiveKind ObjectiveKind => (Core.FloorObjectiveKind)objectiveKind.Value;
-        public int ObjectiveProgress => objectiveProgress.Value;
-        public int ObjectiveTarget => objectiveTarget.Value;
+        /// <summary>このマシンのラン（Phase0Bootstrap が設定する）。ホストでは正、クライアントでは写し。</summary>
+        public static Session.RunSession LocalSession { get; set; }
         /// <summary>このマシンはホストの値を受け取る側か（HUD はこちらの値を出す）。</summary>
         public static bool IsRemoteView => Instance != null && !Instance.IsServerStarted;
 
@@ -41,24 +36,34 @@ namespace SpinTheScrap.Net
             runSeed.OnChange += (prev, next, asServer) => Changed?.Invoke();
             floor.OnChange += (prev, next, asServer) => Changed?.Invoke();
             attempt.OnChange += (prev, next, asServer) => Changed?.Invoke();
+            state.OnChange += (prev, next, asServer) =>
+            {
+                if (!asServer && !IsServerStarted && LocalSession != null) LocalSession.LoadState(next);
+            };
         }
 
         public override void OnStartNetwork() => Instance = this;
+
+        public override void OnStartClient()
+        {
+            if (!IsServerStarted && LocalSession != null) LocalSession.LoadState(state.Value);
+        }
 
         public override void OnStopNetwork()
         {
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>ホスト：メダル・残機・攻略条件の進み具合を配る（変わったときだけ送られる）。</summary>
+        /// <summary>
+        /// ホスト：ランの状態を配る（変わったときだけ送られる）。immediately でなければ 0.1 秒おき
+        /// （敵を倒した・電池が減ったなど、毎フレーム変わる物のため）。
+        /// </summary>
         [Server]
-        public void PublishProgress(Core.RunState run)
+        public void PublishState(Session.RunSession session, bool immediately = false)
         {
-            medals.Value = (float)run.Medals;
-            lives.Value = run.Lives;
-            objectiveKind.Value = (int)run.Objective.Kind;
-            objectiveProgress.Value = (int)run.Objective.Progress;
-            objectiveTarget.Value = (int)run.Objective.Target;
+            if (!immediately && UnityEngine.Time.unscaledTime < nextStateTime) return;
+            nextStateTime = UnityEngine.Time.unscaledTime + 0.1f;
+            state.Value = session.SaveState();
         }
 
         /// <summary>ホストが今のランと階層を配る。</summary>
